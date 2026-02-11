@@ -1,0 +1,42 @@
+name: Publish Python
+
+on:
+  push:
+    tags:
+      - 'py-v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Install metakit-sdk
+        run: pip install -e vendor/metakit-sdk/packages/python
+
+      - name: Install and test
+        working-directory: packages/python
+        run: |
+          pip install -e ".[dev]"
+          pytest tests/ -v
+
+      - name: Build
+        working-directory: packages/python
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/python/dist/

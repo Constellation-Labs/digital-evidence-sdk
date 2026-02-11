@@ -1,0 +1,48 @@
+name: Publish TypeScript
+
+on:
+  push:
+    tags:
+      - 'ts-v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install metakit-sdk dependencies
+        working-directory: vendor/metakit-sdk/packages/typescript
+        run: npm ci
+
+      - name: Build metakit-sdk
+        working-directory: vendor/metakit-sdk/packages/typescript
+        run: npm run build
+
+      - name: Install dependencies
+        working-directory: packages/typescript
+        run: npm ci
+
+      - name: Build
+        working-directory: packages/typescript
+        run: npm run build
+
+      - name: Test
+        working-directory: packages/typescript
+        run: npm test
+
+      - name: Publish
+        working-directory: packages/typescript
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

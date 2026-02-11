@@ -1,0 +1,74 @@
+{
+  "description": "Cross-language test vectors for DED SDK fingerprint operations",
+  "vectors": [
+    {
+      "name": "basic_fingerprint_submission",
+      "description": "A complete fingerprint submission with known private key, verifying canonical JSON, hash, and signature compatibility",
+      "privateKey": "ee1c154b5ac1e999d4a4d5d43cc6ef53a6e36c24e87da90816f209f02239b9cd",
+      "fingerprintValue": {
+        "orgId": "550e8400-e29b-41d4-a716-446655440000",
+        "tenantId": "123e4567-e89b-12d3-a456-426614174000",
+        "eventId": "7ca8c920-0ead-22e2-91c5-11d05fe540d9",
+        "documentId": "contract-2024-001",
+        "documentRef": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timestamp": "2024-01-15T10:30:00.000Z",
+        "version": 1
+      },
+      "documentContent": "This is a sample document for testing.",
+      "documentContentHash": "952e76e23e01ad25b1ae3fb7298f2d35898dc6ebad49e5f170b9e65c1fa5d569",
+      "expectedCanonicalFields": [
+        "documentId",
+        "documentRef",
+        "eventId",
+        "orgId",
+        "tenantId",
+        "timestamp",
+        "version"
+      ],
+      "notes": "signerId is intentionally omitted to test the optional field behavior"
+    },
+    {
+      "name": "fingerprint_with_signer_id",
+      "description": "A fingerprint with signerId populated (derived from private key)",
+      "privateKey": "ee1c154b5ac1e999d4a4d5d43cc6ef53a6e36c24e87da90816f209f02239b9cd",
+      "fingerprintValue": {
+        "orgId": "550e8400-e29b-41d4-a716-446655440000",
+        "tenantId": "123e4567-e89b-12d3-a456-426614174000",
+        "eventId": "7ca8c920-0ead-22e2-91c5-11d05fe540d9",
+        "documentId": "contract-2024-001",
+        "documentRef": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timestamp": "2024-01-15T10:30:00.000Z",
+        "version": 1
+      },
+      "includeSignerId": true,
+      "expectedCanonicalFields": [
+        "documentId",
+        "documentRef",
+        "eventId",
+        "orgId",
+        "signerId",
+        "tenantId",
+        "timestamp",
+        "version"
+      ]
+    },
+    {
+      "name": "fingerprint_with_metadata",
+      "description": "A fingerprint with metadata including tags",
+      "privateKey": "ee1c154b5ac1e999d4a4d5d43cc6ef53a6e36c24e87da90816f209f02239b9cd",
+      "fingerprintValue": {
+        "orgId": "550e8400-e29b-41d4-a716-446655440000",
+        "tenantId": "123e4567-e89b-12d3-a456-426614174000",
+        "eventId": "7ca8c920-0ead-22e2-91c5-11d05fe540d9",
+        "documentId": "contract-2024-001",
+        "documentRef": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timestamp": "2024-01-15T10:30:00.000Z",
+        "version": 1
+      },
+      "tags": {
+        "department": "legal",
+        "priority": "high"
+      }
+    }
+  ]
+}

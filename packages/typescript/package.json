@@ -1,0 +1,71 @@
+{
+  "name": "@constellation-network/ded-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the Digital Evidence Depository (DED) on Constellation Network",
+  "main": "dist/cjs/core/index.js",
+  "module": "dist/esm/core/index.js",
+  "types": "dist/types/core/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/core/index.js",
+      "require": "./dist/cjs/core/index.js",
+      "types": "./dist/types/core/index.d.ts"
+    },
+    "./network": {
+      "import": "./dist/esm/network/index.js",
+      "require": "./dist/cjs/network/index.js",
+      "types": "./dist/types/network/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npm run build:cjs && npm run build:esm && npm run build:types",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:types": "tsc -p tsconfig.types.json",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src tests",
+    "format": "prettier --write src tests",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "constellation",
+    "ded",
+    "digital-evidence",
+    "fingerprint",
+    "notarization",
+    "metagraph",
+    "secp256k1",
+    "rfc8785",
+    "cryptographic-proof"
+  ],
+  "author": "Constellation Network",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Constellation-Labs/ded-sdk.git",
+    "directory": "packages/typescript"
+  },
+  "dependencies": {
+    "@constellation-network/metagraph-sdk": "file:../../vendor/metakit-sdk/packages/typescript",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "prettier": "^3.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
