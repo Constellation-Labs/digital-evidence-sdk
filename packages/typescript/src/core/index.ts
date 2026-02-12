@@ -59,6 +59,7 @@ export {
   isValidPublicKey,
   // Signing & verification
   sign,
+  signDataUpdate,
   verify,
   verifyHash,
   verifySignature,
