@@ -67,7 +67,7 @@ export class DedClient {
         hash: metadataHash,
         tags: {
           protocol: 'poker-mpvsp',
-          instance: instanceId,
+          instance: instanceId.replace(/-/g, ''),
           epoch: String(epoch),
           hand: String(stateRecord.state.handNumber),
           phase: stateRecord.state.phase,
@@ -158,8 +158,8 @@ export class DedClient {
         return null;
       }
 
-      const result = await res.json() as { data: Array<{ hash: string; accepted: boolean; errors: string[] }> };
-      const first = result.data[0];
+      const result = await res.json() as Array<{ hash: string; accepted: boolean; errors: string[]; eventId: string }>;
+      const first = result[0];
       if (!first?.accepted) {
         console.error(`  [DED REJECTED] ${first?.errors?.join(', ')}`);
         return null;
@@ -203,8 +203,8 @@ export class DedClient {
         return null;
       }
 
-      const result = await res.json() as { data: Array<{ hash: string; accepted: boolean }> };
-      const first = result.data[0];
+      const result = await res.json() as Array<{ hash: string; accepted: boolean; eventId: string }>;
+      const first = result[0];
       return first?.accepted
         ? { fingerprintHash: first.hash, documentRef }
         : null;

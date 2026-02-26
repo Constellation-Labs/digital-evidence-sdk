@@ -90,18 +90,24 @@ function evaluate5(cards: Card[]): HandRank {
   return { rank: 0, name: 'High Card', kickers: ranks };
 }
 
-/** Find the best 5-card hand from 7 cards */
+/** Find the best 5-card hand from 5, 6, or 7 cards */
 export function bestHand(cards: Card[]): HandRank {
+  if (cards.length < 5) return { rank: -1, name: '', kickers: [] };
+  if (cards.length === 5) return evaluate5(cards);
+
   let best: HandRank = { rank: -1, name: '', kickers: [] };
 
-  // Generate all C(7,5) = 21 combinations
-  for (let i = 0; i < cards.length; i++) {
-    for (let j = i + 1; j < cards.length; j++) {
-      const five = cards.filter((_, idx) => idx !== i && idx !== j);
-      const hand = evaluate5(five);
-      if (compareHands(hand, best) > 0) best = hand;
-    }
-  }
+  // Generate all C(n,5) combinations
+  const n = cards.length;
+  for (let a = 0; a < n; a++)
+    for (let b = a + 1; b < n; b++)
+      for (let c = b + 1; c < n; c++)
+        for (let d = c + 1; d < n; d++)
+          for (let e = d + 1; e < n; e++) {
+            const five = [cards[a]!, cards[b]!, cards[c]!, cards[d]!, cards[e]!];
+            const hand = evaluate5(five);
+            if (compareHands(hand, best) > 0) best = hand;
+          }
   return best;
 }
 
