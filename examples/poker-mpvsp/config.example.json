@@ -1,0 +1,27 @@
+{
+  "ded": {
+    "baseUrl": "https://api.ded.constellationnetwork.io",
+    "orgId": "YOUR_ORG_UUID",
+    "tenantId": "YOUR_TENANT_UUID",
+    "apiKey": "YOUR_API_KEY"
+  },
+  "game": {
+    "startingChips": 1000,
+    "smallBlind": 10,
+    "bigBlind": 20,
+    "handsToPlay": 5
+  },
+  "players": [
+    { "name": "alice", "strategy": "tight" },
+    { "name": "bob", "strategy": "loose" },
+    { "name": "charlie", "strategy": "random" }
+  ],
+  "codeRef": {
+    "repository": "github.com/constellation-network/ded-sdk",
+    "branch": "examples/poker-mpvsp",
+    "entrypoint": "examples/poker-mpvsp/src/poker.ts"
+  },
+  "dryRun": true,
+  "keysDir": "./keys",
+  "checkpointEveryNHands": 1
+}

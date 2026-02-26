@@ -30,3 +30,16 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.listing
+
+# Zip distributions
+*.zip
+
+# Claude local config
+.claude/

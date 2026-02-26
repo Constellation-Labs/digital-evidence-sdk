@@ -1,0 +1,27 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'actorBkg': '#1A3A5C', 'actorTextColor': '#ffffff', 'actorBorder': '#1A3A5C', 'activationBorderColor': '#4A90D9', 'activationBkgColor': '#E8F0FE', 'signalColor': '#1A3A5C', 'signalTextColor': '#1A3A5C', 'noteBkgColor': '#FFF3E0', 'noteTextColor': '#333333', 'noteBorderColor': '#E65100', 'sequenceNumberColor': '#ffffff' }, 'sequence': { 'mirrorActors': false, 'messageAlign': 'center', 'width': 200, 'noteMargin': 12, 'actorMargin': 80 }}}%%
+
+sequenceDiagram
+    autonumber
+
+    participant A as Agent
+    participant WS as WorldState
+    participant MPT as MPT (LevelDB)
+    participant DED as DED API
+
+    A ->>+ WS: insert(streamKey, eventId, stateHash)
+
+    WS ->>+ MPT: trie.insert(path, hash)
+    MPT -->>- WS: newRoot (SHA-256 digest)
+
+    Note over WS: buildFingerprint(<br/>documentRef = newRoot,<br/>documentId = parent:{prevHash}:ordinal:{N})
+
+    Note over WS: sign(fingerprint, privateKey)<br/>SECP256K1_RFC8785_V1
+
+    WS ->>+ DED: POST /v1/fingerprints
+    DED -->>- WS: { hash, accepted: true }
+
+    Note over WS: updateChainState(<br/>streamKey, hash, ordinal + 1)
+
+    WS ->> MPT: persistTrie(streamKey)
+
+    WS -->>- A: { fingerprintHash, ordinal, mptRoot }
