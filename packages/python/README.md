@@ -1,4 +1,4 @@
-# constellation-ded-sdk
+# constellation-digital-evidence-sdk
 
 Python SDK for the Digital Evidence Depository (DED) on Constellation Network.
 

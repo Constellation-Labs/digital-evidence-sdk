@@ -1,20 +1,18 @@
-# DED SDK
+# Digital Evidence SDK
 
 SDK for the Digital Evidence Depository (DED) on Constellation Network. Create, sign, and submit cryptographic fingerprints for document notarization.
 
-Available in **TypeScript** (`@constellation-network/ded-sdk`) and **Python** (`constellation-ded-sdk`).
+Available in **TypeScript** (`@constellation-network/digital-evidence-sdk`) and **Python** (`constellation-digital-evidence-sdk`).
 
 ## Architecture
 
 ```
-ded-sdk/
+digital-evidence-sdk/
 ├── packages/
-│   ├── typescript/     # @constellation-network/ded-sdk (npm)
-│   └── python/         # constellation-ded-sdk (PyPI)
-├── shared/
-│   └── test_vectors/   # Cross-language test vectors
-└── vendor/
-    └── metakit-sdk/    # Git submodule (crypto primitives)
+│   ├── typescript/     # @constellation-network/digital-evidence-sdk (npm)
+│   └── python/         # constellation-digital-evidence-sdk (PyPI)
+└── shared/
+    └── test_vectors/   # Cross-language test vectors
 ```
 
 **Core module** (default import) — pure crypto, no network dependencies. Works in browsers, Node.js, serverless.
@@ -26,7 +24,7 @@ ded-sdk/
 ### Install
 
 ```bash
-npm install @constellation-network/ded-sdk
+npm install @constellation-network/digital-evidence-sdk
 ```
 
 ### Core — Generate and sign a fingerprint
@@ -37,7 +35,7 @@ import {
   generateKeyPair,
   hashDocument,
   validateSubmission,
-} from '@constellation-network/ded-sdk';
+} from '@constellation-network/digital-evidence-sdk';
 
 // Generate a wallet (or use an existing private key)
 const keyPair = generateKeyPair();
@@ -67,7 +65,7 @@ import {
   signFingerprint,
   hashDocument,
   getPublicKeyId,
-} from '@constellation-network/ded-sdk';
+} from '@constellation-network/digital-evidence-sdk';
 
 // 1. Hash the document
 const documentRef = hashDocument('my document content');
@@ -93,7 +91,7 @@ const submission = {
 ### Network — Submit to the DED API
 
 ```typescript
-import { DedClient } from '@constellation-network/ded-sdk/network';
+import { DedClient } from '@constellation-network/digital-evidence-sdk/network';
 
 const client = new DedClient({
   baseUrl: 'http://localhost:8081',
@@ -119,7 +117,7 @@ const batch = await client.batches.get(batchId);
 ### FingerprintGenerator — Reuse config across submissions
 
 ```typescript
-import { FingerprintGenerator } from '@constellation-network/ded-sdk';
+import { FingerprintGenerator } from '@constellation-network/digital-evidence-sdk';
 
 const generator = new FingerprintGenerator({
   privateKey: 'your-private-key',
@@ -146,15 +144,15 @@ const sub2 = await generator.generate({
 ### Install
 
 ```bash
-pip install constellation-ded-sdk
+pip install constellation-digital-evidence-sdk
 # For network module:
-pip install constellation-ded-sdk[network]
+pip install constellation-digital-evidence-sdk[network]
 ```
 
 ### Core — Generate and sign a fingerprint
 
 ```python
-from constellation_ded_sdk import generate_fingerprint, GenerateOptions
+from constellation_digital_evidence_sdk import generate_fingerprint, GenerateOptions
 from constellation_sdk import generate_key_pair
 
 key_pair = generate_key_pair()
@@ -178,7 +176,7 @@ print(submission.to_dict())
 ### Network — Submit to the DED API
 
 ```python
-from constellation_ded_sdk.network import DedClient, DedClientConfig
+from constellation_digital_evidence_sdk.network import DedClient, DedClientConfig
 
 async with DedClient(DedClientConfig(
     base_url="http://localhost:8081",
@@ -202,9 +200,8 @@ The SDK implements `SECP256K1_RFC8785_V1`:
 ## Development
 
 ```bash
-# Clone with submodules
-git clone --recurse-submodules https://github.com/Constellation-Labs/ded-sdk.git
-cd ded-sdk
+git clone https://github.com/Constellation-Labs/digital-evidence-sdk.git
+cd digital-evidence-sdk
 
 # TypeScript
 cd packages/typescript
@@ -215,7 +212,6 @@ npm run build
 # Python
 cd packages/python
 python3 -m venv .venv
-.venv/bin/pip install -e ../../vendor/metakit-sdk/packages/python
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest tests/ -v
 ```

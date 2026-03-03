@@ -4,14 +4,14 @@ import pytest
 
 from constellation_sdk import generate_key_pair, get_public_key_id, hash_data, verify_hash
 
-from constellation_ded_sdk.core.fingerprint import (
+from constellation_digital_evidence_sdk.core.fingerprint import (
     create_fingerprint_value,
     sign_fingerprint,
     generate_fingerprint,
     FingerprintGenerator,
 )
-from constellation_ded_sdk.core.errors import SigningError
-from constellation_ded_sdk.core.types import GenerateOptions
+from constellation_digital_evidence_sdk.core.errors import SigningError
+from constellation_digital_evidence_sdk.core.types import GenerateOptions
 
 
 BASE_OPTIONS = GenerateOptions(

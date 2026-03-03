@@ -1,5 +1,5 @@
 /**
- * @constellation-network/ded-sdk — Core module
+ * @constellation-network/digital-evidence-sdk — Core module
  *
  * Pure cryptographic operations for creating, signing, and validating
  * DED fingerprint submissions. No network dependencies.
