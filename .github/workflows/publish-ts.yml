@@ -55,6 +55,8 @@ jobs:
       - name: Publish to npm
         working-directory: packages/typescript
         run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
