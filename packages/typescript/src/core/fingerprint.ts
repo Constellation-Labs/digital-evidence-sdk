@@ -1,7 +1,4 @@
-import {
-  sign,
-  getPublicKeyId,
-} from '@constellation-network/metagraph-sdk';
+import { sign, getPublicKeyId } from '@constellation-network/metagraph-sdk';
 import { SigningError } from './errors';
 import { hashDocument } from './document';
 import { createMetadata } from './metadata';
@@ -30,14 +27,10 @@ export function createFingerprintValue(
 ): FingerprintValue {
   const documentRef =
     options.documentRef ??
-    (options.documentContent
-      ? hashDocument(options.documentContent)
-      : undefined);
+    (options.documentContent ? hashDocument(options.documentContent) : undefined);
 
   if (!documentRef) {
-    throw new SigningError(
-      'Either documentRef or documentContent must be provided'
-    );
+    throw new SigningError('Either documentRef or documentContent must be provided');
   }
 
   const timestamp = (options.timestamp ?? new Date()).toISOString();
@@ -121,9 +114,7 @@ export async function generateFingerprint(
   const signedFingerprint = await signFingerprint(value, privateKey);
 
   const metadata =
-    options.includeMetadata || options.tags
-      ? createMetadata(value, options.tags)
-      : undefined;
+    options.includeMetadata || options.tags ? createMetadata(value, options.tags) : undefined;
 
   return {
     attestation: signedFingerprint,
@@ -140,11 +131,7 @@ export class FingerprintGenerator {
   private readonly publicKeyId: string;
   private readonly defaults: { orgId?: string; tenantId?: string };
 
-  constructor(config: {
-    privateKey: string;
-    orgId?: string;
-    tenantId?: string;
-  }) {
+  constructor(config: { privateKey: string; orgId?: string; tenantId?: string }) {
     this.privateKey = config.privateKey;
     this.publicKeyId = getPublicKeyId(config.privateKey);
     this.defaults = { orgId: config.orgId, tenantId: config.tenantId };

@@ -1,9 +1,5 @@
 import { DedHttpClient } from './http-client';
-import type {
-  DataResponse,
-  BatchDetail,
-  FingerprintDetail,
-} from './types';
+import type { DataResponse, BatchDetail, FingerprintDetail } from './types';
 
 /**
  * API client for batch endpoints (all public, no API key required).
@@ -18,9 +14,7 @@ export class BatchesApi {
    * @returns Batch detail including status and fingerprint count
    */
   async get(batchId: string): Promise<DataResponse<BatchDetail>> {
-    return this.http.getPublic<DataResponse<BatchDetail>>(
-      `/v1/batches/${batchId}`
-    );
+    return this.http.getPublic<DataResponse<BatchDetail>>(`/v1/batches/${batchId}`);
   }
 
   /**
@@ -29,9 +23,7 @@ export class BatchesApi {
    * @param batchId - UUID of the batch
    * @returns List of fingerprint details belonging to this batch
    */
-  async getFingerprints(
-    batchId: string
-  ): Promise<DataResponse<FingerprintDetail[]>> {
+  async getFingerprints(batchId: string): Promise<DataResponse<FingerprintDetail[]>> {
     return this.http.getPublic<DataResponse<FingerprintDetail[]>>(
       `/v1/batches/${batchId}/fingerprints`
     );

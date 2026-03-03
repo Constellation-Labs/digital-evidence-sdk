@@ -37,10 +37,7 @@ export class DedHttpClient {
   }
 
   /** GET request (public, no API key) */
-  async getPublic<T>(
-    path: string,
-    query?: Record<string, string>
-  ): Promise<T> {
+  async getPublic<T>(path: string, query?: Record<string, string>): Promise<T> {
     const url = this.buildUrl(path, query);
     return this.request<T>(url, { method: 'GET', public: true });
   }
