@@ -1,4 +1,0 @@
-[submodule "vendor/metakit-sdk"]
-	path = vendor/metakit-sdk
-	url = https://github.com/Constellation-Labs/metakit-sdk.git
-	branch = main
