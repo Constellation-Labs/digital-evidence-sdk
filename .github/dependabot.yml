@@ -1,0 +1,59 @@
+version: 2
+updates:
+  # TypeScript dependencies
+  - package-ecosystem: "npm"
+    directory: "/packages/typescript"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      typescript-dev:
+        patterns:
+          - "@types/*"
+          - "@rollup/*"
+          - "@typescript-eslint/*"
+          - "typescript"
+          - "rollup"
+          - "tslib"
+          - "jest"
+          - "ts-jest"
+          - "eslint*"
+          - "prettier"
+        update-types:
+          - "minor"
+          - "patch"
+      typescript-prod:
+        patterns:
+          - "@constellation-network/*"
+          - "zod"
+
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/packages/python"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      python-dev:
+        patterns:
+          - "pytest*"
+          - "httpx"
+        update-types:
+          - "minor"
+          - "patch"
+      python-prod:
+        patterns:
+          - "constellation-metagraph-sdk"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
