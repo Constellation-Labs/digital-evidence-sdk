@@ -1,7 +1,4 @@
-import type {
-  FingerprintSubmission,
-  FingerprintSubmissionResult,
-} from '../core/types';
+import type { FingerprintSubmission, FingerprintSubmissionResult } from '../core/types';
 import { DedHttpClient } from './http-client';
 import type {
   DataResponse,
@@ -31,13 +28,8 @@ export class FingerprintsApi {
    * @param submissions - Array of FingerprintSubmission objects
    * @returns Array of results indicating acceptance/rejection per submission
    */
-  async submit(
-    submissions: FingerprintSubmission[]
-  ): Promise<FingerprintSubmissionResult[]> {
-    return this.http.post<FingerprintSubmissionResult[]>(
-      '/v1/fingerprints',
-      submissions
-    );
+  async submit(submissions: FingerprintSubmission[]): Promise<FingerprintSubmissionResult[]> {
+    return this.http.post<FingerprintSubmissionResult[]>('/v1/fingerprints', submissions);
   }
 
   /**
@@ -75,13 +67,8 @@ export class FingerprintsApi {
    * @param submissions - Array of FingerprintSubmission objects to validate
    * @returns Array of validation results
    */
-  async validate(
-    submissions: FingerprintSubmission[]
-  ): Promise<FingerprintSubmissionResult[]> {
-    return this.http.post<FingerprintSubmissionResult[]>(
-      '/v1/fingerprints/validate',
-      submissions
-    );
+  async validate(submissions: FingerprintSubmission[]): Promise<FingerprintSubmissionResult[]> {
+    return this.http.post<FingerprintSubmissionResult[]>('/v1/fingerprints/validate', submissions);
   }
 
   /**
@@ -105,10 +92,7 @@ export class FingerprintsApi {
       formData.append(documentRef, blob);
     }
 
-    return this.http.postMultipart<DocumentUploadResultItem[]>(
-      '/v1/fingerprints/upload',
-      formData
-    );
+    return this.http.postMultipart<DocumentUploadResultItem[]>('/v1/fingerprints/upload', formData);
   }
 
   /**
@@ -117,9 +101,7 @@ export class FingerprintsApi {
    * @param params - Search query parameters
    * @returns Paginated list of fingerprint details
    */
-  async search(
-    params: FingerprintSearchParams
-  ): Promise<PaginatedResponse<FingerprintDetail[]>> {
+  async search(params: FingerprintSearchParams): Promise<PaginatedResponse<FingerprintDetail[]>> {
     const query: Record<string, string> = {};
 
     if (params.documentId) query['document_id'] = params.documentId;
@@ -132,10 +114,7 @@ export class FingerprintsApi {
     if (params.forward !== undefined) query['forward'] = String(params.forward);
     if (params.tags) query['tags'] = JSON.stringify(params.tags);
 
-    return this.http.get<PaginatedResponse<FingerprintDetail[]>>(
-      '/v1/fingerprints',
-      query
-    );
+    return this.http.get<PaginatedResponse<FingerprintDetail[]>>('/v1/fingerprints', query);
   }
 
   // ─── Public endpoints (no API key required) ────────────────────
@@ -147,9 +126,7 @@ export class FingerprintsApi {
    * @returns Fingerprint detail
    */
   async getByHash(hash: string): Promise<DataResponse<FingerprintDetail>> {
-    return this.http.getPublic<DataResponse<FingerprintDetail>>(
-      `/v1/fingerprints/${hash}`
-    );
+    return this.http.getPublic<DataResponse<FingerprintDetail>>(`/v1/fingerprints/${hash}`);
   }
 
   /**
@@ -159,9 +136,7 @@ export class FingerprintsApi {
    * @returns Proof data including batch root, path, and indices
    */
   async getProof(hash: string): Promise<DataResponse<FingerprintProof>> {
-    return this.http.getPublic<DataResponse<FingerprintProof>>(
-      `/v1/fingerprints/${hash}/proof`
-    );
+    return this.http.getPublic<DataResponse<FingerprintProof>>(`/v1/fingerprints/${hash}/proof`);
   }
 
   /**
@@ -179,10 +154,7 @@ export class FingerprintsApi {
     if (limit !== undefined) query['limit'] = String(limit);
     if (status) query['status'] = status;
 
-    return this.http.getPublic<DataResponse<FingerprintDetail[]>>(
-      '/v1/fingerprints/latest',
-      query
-    );
+    return this.http.getPublic<DataResponse<FingerprintDetail[]>>('/v1/fingerprints/latest', query);
   }
 
   /**
@@ -191,8 +163,6 @@ export class FingerprintsApi {
    * @returns Statistics including total fingerprints, batches, and finalized count
    */
   async getStats(): Promise<DataResponse<PlatformStats>> {
-    return this.http.getPublic<DataResponse<PlatformStats>>(
-      '/v1/fingerprints/stats'
-    );
+    return this.http.getPublic<DataResponse<PlatformStats>>('/v1/fingerprints/stats');
   }
 }

@@ -22,7 +22,6 @@ py-venv:
 	python3 -m venv $(PYTHON_VENV)
 
 py-install: py-venv
-	$(PIP) install -e vendor/metakit-sdk/packages/python
 	cd packages/python && ../$(PIP) install -e ".[dev]"
 
 py-build:
@@ -46,10 +45,3 @@ lint: ts-lint py-lint
 clean:
 	rm -rf packages/typescript/dist packages/typescript/coverage
 	rm -rf packages/python/dist packages/python/build packages/python/*.egg-info
-
-# Submodule management
-submodule-init:
-	git submodule update --init --recursive
-
-submodule-update:
-	git submodule update --remote --merge

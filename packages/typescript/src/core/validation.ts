@@ -6,8 +6,7 @@ import type { FingerprintSubmission } from './types';
 const hexPattern = /^[0-9a-fA-F]+$/;
 
 /** UUID v4 pattern (loose — accepts any UUID-shaped string) */
-const uuidPattern =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 /** Zod schema for FingerprintValue, matching proto validation rules */
 export const FingerprintValueSchema = z.object({
@@ -50,16 +49,9 @@ export const SignatureProofSchema = z.object({
 
 /** Zod schema for FingerprintMetadata */
 export const FingerprintMetadataSchema = z.object({
-  hash: z
-    .string()
-    .min(32)
-    .max(128)
-    .regex(hexPattern, 'hash must be hex-encoded'),
+  hash: z.string().min(32).max(128).regex(hexPattern, 'hash must be hex-encoded'),
   tags: z
-    .record(
-      z.string().min(1).max(32),
-      z.string().max(32)
-    )
+    .record(z.string().min(1).max(32), z.string().max(32))
     .refine((tags) => Object.keys(tags).length <= 6, {
       message: 'tags must have at most 6 pairs',
     })
@@ -70,9 +62,7 @@ export const FingerprintMetadataSchema = z.object({
 export const FingerprintSubmissionSchema = z.object({
   attestation: z.object({
     content: FingerprintValueSchema,
-    proofs: z
-      .array(SignatureProofSchema)
-      .min(1, 'at least one proof is required'),
+    proofs: z.array(SignatureProofSchema).min(1, 'at least one proof is required'),
   }),
   metadata: FingerprintMetadataSchema.optional(),
 });

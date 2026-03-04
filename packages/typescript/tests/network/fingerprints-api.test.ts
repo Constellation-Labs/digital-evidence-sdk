@@ -38,9 +38,7 @@ beforeEach(() => {
 describe('FingerprintsApi', () => {
   describe('submit', () => {
     it('should POST to /v1/fingerprints with API key', async () => {
-      const responseData = [
-        { eventId: 'abc', hash: 'def', accepted: true, errors: [] },
-      ];
+      const responseData = [{ eventId: 'abc', hash: 'def', accepted: true, errors: [] }];
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(responseData),
@@ -62,13 +60,10 @@ describe('FingerprintsApi', () => {
         ok: false,
         status: 402,
         statusText: 'Payment Required',
-        json: () =>
-          Promise.resolve({ message: 'Insufficient credits' }),
+        json: () => Promise.resolve({ message: 'Insufficient credits' }),
       });
 
-      await expect(
-        client.fingerprints.submit([validSubmission])
-      ).rejects.toThrow(DedApiError);
+      await expect(client.fingerprints.submit([validSubmission])).rejects.toThrow(DedApiError);
     });
   });
 
@@ -108,10 +103,7 @@ describe('FingerprintsApi', () => {
     it('should POST to /v1/fingerprints/validate', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () =>
-          Promise.resolve([
-            { eventId: 'abc', hash: 'def', accepted: true, errors: [] },
-          ]),
+        json: () => Promise.resolve([{ eventId: 'abc', hash: 'def', accepted: true, errors: [] }]),
       });
 
       await client.fingerprints.validate([validSubmission]);
@@ -241,9 +233,7 @@ describe('BatchesApi', () => {
       await client.batches.getFingerprints('abc-uuid');
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).toBe(
-        'http://localhost:8081/v1/batches/abc-uuid/fingerprints'
-      );
+      expect(url).toBe('http://localhost:8081/v1/batches/abc-uuid/fingerprints');
     });
   });
 });

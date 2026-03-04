@@ -1,6 +1,6 @@
 """Tests for document hashing."""
 
-from constellation_ded_sdk.core.document import hash_document
+from constellation_digital_evidence_sdk.core.document import hash_document
 
 
 def test_hash_string_produces_64_char_hex():

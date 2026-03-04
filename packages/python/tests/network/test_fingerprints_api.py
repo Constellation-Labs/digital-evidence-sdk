@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from constellation_ded_sdk.network import DedClient
-from constellation_ded_sdk.network.types import DedClientConfig, FingerprintSearchParams
-from constellation_ded_sdk.network.http_client import DedApiError
-from constellation_ded_sdk.core.types import (
+from constellation_digital_evidence_sdk.network import DedClient
+from constellation_digital_evidence_sdk.network.types import DedClientConfig, FingerprintSearchParams
+from constellation_digital_evidence_sdk.network.http_client import DedApiError
+from constellation_digital_evidence_sdk.core.types import (
     FingerprintSubmission,
     SignedFingerprint,
     FingerprintValue,

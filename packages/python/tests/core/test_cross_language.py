@@ -5,10 +5,10 @@ from pathlib import Path
 
 from constellation_sdk import canonicalize, get_public_key_id, hash_data, verify_hash
 
-from constellation_ded_sdk.core.document import hash_document
-from constellation_ded_sdk.core.fingerprint import sign_fingerprint
-from constellation_ded_sdk.core.metadata import compute_metadata_hash, create_metadata
-from constellation_ded_sdk.core.types import FingerprintValue
+from constellation_digital_evidence_sdk.core.document import hash_document
+from constellation_digital_evidence_sdk.core.fingerprint import sign_fingerprint
+from constellation_digital_evidence_sdk.core.metadata import compute_metadata_hash, create_metadata
+from constellation_digital_evidence_sdk.core.types import FingerprintValue
 
 VECTORS_PATH = Path(__file__).parent.parent.parent.parent.parent / "shared" / "test_vectors" / "fingerprint_vectors.json"
 VECTORS = json.loads(VECTORS_PATH.read_text())

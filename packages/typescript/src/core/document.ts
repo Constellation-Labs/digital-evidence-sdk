@@ -10,9 +10,6 @@ import { hashBytes } from '@constellation-network/metagraph-sdk';
  * @returns Hex-encoded SHA-256 hash (64 characters)
  */
 export function hashDocument(content: string | Uint8Array): string {
-  const bytes =
-    typeof content === 'string'
-      ? new TextEncoder().encode(content)
-      : content;
+  const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
   return hashBytes(bytes).value;
 }

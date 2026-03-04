@@ -1,8 +1,8 @@
 /**
- * @constellation-network/ded-sdk/network
+ * @constellation-network/digital-evidence-sdk/network
  *
  * Network module for interacting with the DED Ingestion API.
- * Import separately: `import { DedClient } from '@constellation-network/ded-sdk/network'`
+ * Import separately: `import { DedClient } from '@constellation-network/digital-evidence-sdk/network'`
  */
 
 import { DedHttpClient } from './http-client';
@@ -18,7 +18,7 @@ import type { DedClientConfig } from './types';
  *
  * @example
  * ```ts
- * import { DedClient } from '@constellation-network/ded-sdk/network';
+ * import { DedClient } from '@constellation-network/digital-evidence-sdk/network';
  *
  * const client = new DedClient({
  *   baseUrl: 'http://localhost:8081',

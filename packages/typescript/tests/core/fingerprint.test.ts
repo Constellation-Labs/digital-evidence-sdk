@@ -10,10 +10,7 @@ import {
   verifyHash,
   hash,
 } from '@constellation-network/metagraph-sdk';
-import type {
-  FingerprintValue,
-  GenerateOptions,
-} from '../../src/core/types';
+import type { FingerprintValue, GenerateOptions } from '../../src/core/types';
 
 describe('createFingerprintValue', () => {
   const baseOptions: GenerateOptions = {
@@ -21,8 +18,7 @@ describe('createFingerprintValue', () => {
     tenantId: '123e4567-e89b-12d3-a456-426614174000',
     eventId: '7ca8c920-0ead-22e2-91c5-11d05fe540d9',
     documentId: 'contract-2024-001',
-    documentRef:
-      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    documentRef: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
   };
 
   it('should create a value with all required fields', () => {
@@ -84,8 +80,7 @@ describe('signFingerprint', () => {
     tenantId: '123e4567-e89b-12d3-a456-426614174000',
     eventId: '7ca8c920-0ead-22e2-91c5-11d05fe540d9',
     documentId: 'contract-2024-001',
-    documentRef:
-      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    documentRef: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
     timestamp: '2024-01-15T10:30:00.000Z',
     version: 1,
   };
@@ -108,11 +103,7 @@ describe('signFingerprint', () => {
 
     // Verify using metakit's verifyHash: compute the hash the same way sign() does
     const valueHash = hash(testValue);
-    const isValid = await verifyHash(
-      valueHash.value,
-      proof.signature,
-      proof.id
-    );
+    const isValid = await verifyHash(valueHash.value, proof.signature, proof.id);
     expect(isValid).toBe(true);
   });
 
@@ -144,9 +135,7 @@ describe('generateFingerprint', () => {
     expect(submission.attestation).toBeDefined();
     expect(submission.attestation.content).toBeDefined();
     expect(submission.attestation.proofs).toHaveLength(1);
-    expect(submission.attestation.content.signerId).toBe(
-      getPublicKeyId(keyPair.privateKey)
-    );
+    expect(submission.attestation.content.signerId).toBe(getPublicKeyId(keyPair.privateKey));
     expect(submission.metadata).toBeUndefined();
   });
 
@@ -202,12 +191,8 @@ describe('FingerprintGenerator', () => {
       documentContent: 'test content',
     });
 
-    expect(submission.attestation.content.orgId).toBe(
-      '550e8400-e29b-41d4-a716-446655440000'
-    );
-    expect(submission.attestation.content.tenantId).toBe(
-      '123e4567-e89b-12d3-a456-426614174000'
-    );
+    expect(submission.attestation.content.orgId).toBe('550e8400-e29b-41d4-a716-446655440000');
+    expect(submission.attestation.content.tenantId).toBe('123e4567-e89b-12d3-a456-426614174000');
   });
 
   it('should expose the public key ID', () => {
@@ -216,8 +201,6 @@ describe('FingerprintGenerator', () => {
       privateKey: keyPair.privateKey,
     });
 
-    expect(generator.getPublicKeyId()).toBe(
-      getPublicKeyId(keyPair.privateKey)
-    );
+    expect(generator.getPublicKeyId()).toBe(getPublicKeyId(keyPair.privateKey));
   });
 });

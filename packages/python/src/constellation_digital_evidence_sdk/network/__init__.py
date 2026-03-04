@@ -22,7 +22,7 @@ class DedClient:
 
     Example::
 
-        from constellation_ded_sdk.network import DedClient
+        from constellation_digital_evidence_sdk.network import DedClient
 
         client = DedClient(DedClientConfig(
             base_url="http://localhost:8081",
