@@ -1,0 +1,33 @@
+{
+  "name": "@constellation-network/ded-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for DED fingerprint services",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "ded-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@constellation-network/digital-evidence-sdk": "file:../typescript",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Constellation-Labs/digital-evidence-sdk.git",
+    "directory": "packages/mcp-server"
+  },
+  "author": "Constellation Network",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

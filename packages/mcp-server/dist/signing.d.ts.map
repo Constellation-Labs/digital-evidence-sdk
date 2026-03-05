@@ -1,0 +1,1 @@
+{"version":3,"file":"signing.d.ts","sourceRoot":"","sources":["../src/signing.ts"],"names":[],"mappings":"AAKA;;;GAGG;AACH,wBAAsB,eAAe,CACnC,gBAAgB,EAAE,MAAM,CAAC,MAAM,EAAE,OAAO,CAAC,EACzC,UAAU,EAAE,MAAM,GACjB,OAAO,CAAC;IAAE,EAAE,EAAE,MAAM,CAAC;IAAC,SAAS,EAAE,MAAM,CAAC;IAAC,SAAS,EAAE,MAAM,CAAA;CAAE,CAAC,CAM/D"}
