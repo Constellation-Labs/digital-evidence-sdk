@@ -94,23 +94,67 @@ export class FingerprintsApi {
   async upload(
     submissions: FingerprintSubmission[],
     documents: Map<string, { blob: Blob; mimeType: string }>
-  ): Promise<DocumentUploadResultItem[]> {
-    const formData = new FormData();
-    formData.append(
-      'fingerprints',
-      new Blob([JSON.stringify(submissions)], { type: 'application/json' })
-    );
-
-    for (const [documentRef, { blob, mimeType }] of documents) {
+  ): Promise<DataResponse<DocumentUploadResultItem[]>> {
+    for (const [documentRef, { mimeType }] of documents) {
       if (!ALLOWED_MIME_TYPES.has(mimeType)) {
         throw new Error(
           `Unsupported mime type "${mimeType}" for document "${documentRef}". Allowed: ${[...ALLOWED_MIME_TYPES].join(', ')}`
         );
       }
-      formData.append(documentRef, new Blob([blob], { type: mimeType }), documentRef);
     }
 
-    return this.http.postMultipart<DocumentUploadResultItem[]>('/v1/fingerprints/upload', formData);
+    const boundary = '----DedSdk' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const parts: Uint8Array[] = [];
+    const encoder = new TextEncoder();
+
+    // Fingerprints JSON part
+    const fingerprintsJson = JSON.stringify(submissions);
+    const fingerprintsBytes = encoder.encode(fingerprintsJson);
+    parts.push(
+      encoder.encode(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="fingerprints"\r\n` +
+          `Content-Type: application/json\r\n` +
+          `Content-Length: ${fingerprintsBytes.byteLength}\r\n` +
+          `\r\n`
+      ),
+      fingerprintsBytes,
+      encoder.encode('\r\n')
+    );
+
+    // Document parts
+    for (const [documentRef, { blob, mimeType }] of documents) {
+      const docBytes = new Uint8Array(await blob.arrayBuffer());
+      parts.push(
+        encoder.encode(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="${documentRef}"; filename="${documentRef}"\r\n` +
+            `Content-Type: ${mimeType}\r\n` +
+            `Content-Length: ${docBytes.byteLength}\r\n` +
+            `\r\n`
+        ),
+        docBytes,
+        encoder.encode('\r\n')
+      );
+    }
+
+    // Final boundary
+    parts.push(encoder.encode(`--${boundary}--\r\n`));
+
+    // Concatenate all parts
+    const totalLength = parts.reduce((sum, p) => sum + p.byteLength, 0);
+    const body = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const part of parts) {
+      body.set(part, offset);
+      offset += part.byteLength;
+    }
+
+    return this.http.postRawMultipart<DataResponse<DocumentUploadResultItem[]>>(
+      '/v1/fingerprints/upload',
+      body,
+      `multipart/form-data; boundary=${boundary}`
+    );
   }
 
   /**

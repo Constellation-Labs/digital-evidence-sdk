@@ -9,21 +9,47 @@ const client = new DedClient({
   apiKey: 'test-api-key',
 });
 
+const orgId = '550e8400-e29b-41d4-a716-446655440000';
+const tenantId = '123e4567-e89b-12d3-a456-426614174000';
+
 beforeEach(() => {
   mockFetch.mockReset();
 });
 
+function mockUploadResponse(
+  items: Array<{ eventId: string; hash: string; contentType: string; fileSize: number }>
+) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: () =>
+      Promise.resolve({
+        data: items.map((item) => ({
+          eventId: item.eventId,
+          hash: item.hash,
+          accepted: true,
+          document: {
+            s3Key: `uploads/${item.hash}`,
+            contentType: item.contentType,
+            fileSize: item.fileSize,
+            uploadedAt: '2025-01-15T10:30:00.000Z',
+          },
+          errors: [],
+        })),
+      }),
+  });
+}
+
 describe('upload file via SDK', () => {
-  it('should generate a fingerprint from document content and upload it', async () => {
+  it('should upload a text document', async () => {
     const keyPair = generateKeyPair();
     const documentContent = 'This is a test document for upload.';
     const documentRef = hashDocument(documentContent);
 
     const submission = await generateFingerprint(
       {
-        orgId: '550e8400-e29b-41d4-a716-446655440000',
-        tenantId: '123e4567-e89b-12d3-a456-426614174000',
-        eventId: '7ca8c920-0ead-22e2-91c5-11d05fe540d9',
+        orgId,
+        tenantId,
+        eventId: crypto.randomUUID(),
         documentId: 'upload-doc-001',
         documentRef,
         includeMetadata: true,
@@ -33,44 +59,38 @@ describe('upload file via SDK', () => {
     );
 
     const documents = new Map([
-      [documentRef, { blob: new Blob([documentContent]), mimeType: 'text/plain' as const }],
+      [documentRef, { blob: new Blob([documentContent]), mimeType: 'text/plain' }],
     ]);
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve([
-          {
-            eventId: submission.attestation.content.eventId,
-            hash: documentRef,
-            accepted: true,
-            document: {
-              s3Key: `uploads/${documentRef}`,
-              contentType: 'text/plain',
-              fileSize: documentContent.length,
-              uploadedAt: new Date().toISOString(),
-            },
-            errors: [],
-          },
-        ]),
-    });
+    mockUploadResponse([
+      {
+        eventId: submission.attestation.content.eventId,
+        hash: documentRef,
+        contentType: 'text/plain',
+        fileSize: documentContent.length,
+      },
+    ]);
 
-    const results = await client.fingerprints.upload([submission], documents);
+    const response = await client.fingerprints.upload([submission], documents);
 
-    expect(results).toHaveLength(1);
-    expect(results[0].accepted).toBe(true);
-    expect(results[0].document).toBeDefined();
-    expect(results[0].document!.contentType).toBe('text/plain');
+    expect(response.data).toHaveLength(1);
+    expect(response.data[0].eventId).toBe(submission.attestation.content.eventId);
+    expect(response.data[0].accepted).toBe(true);
+    expect(response.data[0].document).toBeDefined();
+    expect(response.data[0].document!.contentType).toBe('text/plain');
 
     const [url, options] = mockFetch.mock.calls[0];
     expect(url).toBe('http://localhost:8081/v1/fingerprints/upload');
     expect(options.method).toBe('POST');
     expect(options.headers['X-Api-Key']).toBe('test-api-key');
-    expect(options.body).toBeInstanceOf(FormData);
+    expect(options.body).toBeInstanceOf(Uint8Array);
+    expect(options.headers['Content-Type']).toMatch(/^multipart\/form-data; boundary=/);
 
-    const formData: FormData = options.body;
-    expect(formData.has('fingerprints')).toBe(true);
-    expect(formData.has(documentRef)).toBe(true);
+    // Verify multipart body contains expected parts with Content-Length headers
+    const bodyText = new TextDecoder().decode(options.body);
+    expect(bodyText).toContain('name="fingerprints"');
+    expect(bodyText).toContain(`name="${documentRef}"`);
+    expect(bodyText).toContain('Content-Length:');
   });
 
   it('should upload a PDF document', async () => {
@@ -80,9 +100,9 @@ describe('upload file via SDK', () => {
 
     const submission = await generateFingerprint(
       {
-        orgId: '550e8400-e29b-41d4-a716-446655440000',
-        tenantId: '123e4567-e89b-12d3-a456-426614174000',
-        eventId: 'aabbccdd-0000-1111-2222-333344445555',
+        orgId,
+        tenantId,
+        eventId: crypto.randomUUID(),
         documentId: 'upload-doc-pdf',
         documentRef,
       },
@@ -90,33 +110,23 @@ describe('upload file via SDK', () => {
     );
 
     const documents = new Map([
-      [documentRef, { blob: new Blob([pdfContent]), mimeType: 'application/pdf' as const }],
+      [documentRef, { blob: new Blob([pdfContent]), mimeType: 'application/pdf' }],
     ]);
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve([
-          {
-            eventId: submission.attestation.content.eventId,
-            hash: documentRef,
-            accepted: true,
-            document: {
-              s3Key: `uploads/${documentRef}`,
-              contentType: 'application/pdf',
-              fileSize: pdfContent.length,
-              uploadedAt: new Date().toISOString(),
-            },
-            errors: [],
-          },
-        ]),
-    });
+    mockUploadResponse([
+      {
+        eventId: submission.attestation.content.eventId,
+        hash: documentRef,
+        contentType: 'application/pdf',
+        fileSize: pdfContent.length,
+      },
+    ]);
 
-    const results = await client.fingerprints.upload([submission], documents);
+    const response = await client.fingerprints.upload([submission], documents);
 
-    expect(results).toHaveLength(1);
-    expect(results[0].accepted).toBe(true);
-    expect(results[0].document!.contentType).toBe('application/pdf');
+    expect(response.data).toHaveLength(1);
+    expect(response.data[0].accepted).toBe(true);
+    expect(response.data[0].document!.contentType).toBe('application/pdf');
   });
 
   it('should upload multiple documents in a single call', async () => {
@@ -132,8 +142,8 @@ describe('upload file via SDK', () => {
         const ref = hashDocument(doc.content);
         return generateFingerprint(
           {
-            orgId: '550e8400-e29b-41d4-a716-446655440000',
-            tenantId: '123e4567-e89b-12d3-a456-426614174000',
+            orgId,
+            tenantId,
             eventId: crypto.randomUUID(),
             documentId: doc.id,
             documentRef: ref,
@@ -150,34 +160,23 @@ describe('upload file via SDK', () => {
       ])
     );
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve(
-          submissions.map((s) => ({
-            eventId: s.attestation.content.eventId,
-            hash: s.attestation.content.documentRef,
-            accepted: true,
-            document: {
-              s3Key: `uploads/${s.attestation.content.documentRef}`,
-              contentType: 'text/plain',
-              fileSize: 10,
-              uploadedAt: new Date().toISOString(),
-            },
-            errors: [],
-          }))
-        ),
-    });
+    mockUploadResponse(
+      docs.map((doc, i) => ({
+        eventId: submissions[i].attestation.content.eventId,
+        hash: hashDocument(doc.content),
+        contentType: doc.mime,
+        fileSize: doc.content.length,
+      }))
+    );
 
-    const results = await client.fingerprints.upload(submissions, documents);
+    const response = await client.fingerprints.upload(submissions, documents);
 
-    expect(results).toHaveLength(2);
-    expect(results.every((r) => r.accepted)).toBe(true);
+    expect(response.data).toHaveLength(2);
+    expect(response.data.every((r) => r.accepted)).toBe(true);
 
-    const formData: FormData = mockFetch.mock.calls[0][1].body;
-    expect(formData.has('fingerprints')).toBe(true);
+    const bodyText = new TextDecoder().decode(mockFetch.mock.calls[0][1].body);
     for (const doc of docs) {
-      expect(formData.has(hashDocument(doc.content))).toBe(true);
+      expect(bodyText).toContain(`name="${hashDocument(doc.content)}"`);
     }
   });
 
@@ -185,9 +184,9 @@ describe('upload file via SDK', () => {
     const keyPair = generateKeyPair();
     const submission = await generateFingerprint(
       {
-        orgId: '550e8400-e29b-41d4-a716-446655440000',
-        tenantId: '123e4567-e89b-12d3-a456-426614174000',
-        eventId: 'aabbccdd-0000-1111-2222-333344445555',
+        orgId,
+        tenantId,
+        eventId: crypto.randomUUID(),
         documentId: 'bad-doc',
         documentContent: 'test',
       },

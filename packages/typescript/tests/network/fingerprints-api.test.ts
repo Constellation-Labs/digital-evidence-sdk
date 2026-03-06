@@ -128,7 +128,7 @@ describe('FingerprintsApi', () => {
     it('should POST multipart for allowed mime types', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve([{ documentRef: 'doc-ref', accepted: true }]),
+        json: () => Promise.resolve({ data: [{ documentRef: 'doc-ref', accepted: true }] }),
       });
 
       const documents = new Map([
@@ -141,7 +141,8 @@ describe('FingerprintsApi', () => {
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).toBe('http://localhost:8081/v1/fingerprints/upload');
       expect(options.method).toBe('POST');
-      expect(options.body).toBeInstanceOf(FormData);
+      expect(options.body).toBeInstanceOf(Uint8Array);
+      expect(options.headers['Content-Type']).toMatch(/^multipart\/form-data; boundary=/);
     });
   });
 
