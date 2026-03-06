@@ -113,6 +113,38 @@ describe('FingerprintsApi', () => {
     });
   });
 
+  describe('upload', () => {
+    it('should reject unsupported mime types', async () => {
+      const documents = new Map([
+        ['doc-ref', { blob: new Blob(['test']), mimeType: 'application/zip' }],
+      ]);
+
+      await expect(client.fingerprints.upload([validSubmission], documents)).rejects.toThrow(
+        'Unsupported mime type "application/zip"'
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should POST multipart for allowed mime types', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([{ documentRef: 'doc-ref', accepted: true }]),
+      });
+
+      const documents = new Map([
+        ['doc-ref', { blob: new Blob(['test']), mimeType: 'application/pdf' }],
+      ]);
+
+      await client.fingerprints.upload([validSubmission], documents);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toBe('http://localhost:8081/v1/fingerprints/upload');
+      expect(options.method).toBe('POST');
+      expect(options.body).toBeInstanceOf(FormData);
+    });
+  });
+
   describe('search', () => {
     it('should GET /v1/fingerprints with query params', async () => {
       mockFetch.mockResolvedValueOnce({
