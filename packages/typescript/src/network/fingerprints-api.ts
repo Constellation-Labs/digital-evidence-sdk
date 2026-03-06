@@ -11,6 +11,19 @@ import type {
   DocumentUploadResultItem,
 } from './types';
 
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/json',
+  'application/xml',
+  'text/csv',
+]);
+
 /**
  * API client for fingerprint endpoints.
  *
@@ -80,7 +93,7 @@ export class FingerprintsApi {
    */
   async upload(
     submissions: FingerprintSubmission[],
-    documents: Map<string, Blob>
+    documents: Map<string, { blob: Blob; mimeType: string }>
   ): Promise<DocumentUploadResultItem[]> {
     const formData = new FormData();
     formData.append(
@@ -88,8 +101,13 @@ export class FingerprintsApi {
       new Blob([JSON.stringify(submissions)], { type: 'application/json' })
     );
 
-    for (const [documentRef, blob] of documents) {
-      formData.append(documentRef, blob);
+    for (const [documentRef, { blob, mimeType }] of documents) {
+      if (!ALLOWED_MIME_TYPES.has(mimeType)) {
+        throw new Error(
+          `Unsupported mime type "${mimeType}" for document "${documentRef}". Allowed: ${[...ALLOWED_MIME_TYPES].join(', ')}`
+        );
+      }
+      formData.append(documentRef, new Blob([blob], { type: mimeType }), documentRef);
     }
 
     return this.http.postMultipart<DocumentUploadResultItem[]>('/v1/fingerprints/upload', formData);
