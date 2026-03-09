@@ -114,6 +114,14 @@ class FingerprintSearchParams:
 
 
 @dataclass(frozen=True)
+class DocumentInfo:
+    """Document descriptor for upload. Pairs a blob with its MIME type."""
+
+    data: bytes
+    mime_type: str
+
+
+@dataclass(frozen=True)
 class DocumentUploadResultItem:
     """Result item from document upload."""
 

@@ -13,6 +13,7 @@ from .types import (
     FingerprintStatus,
     BatchDetail,
     PlatformStats,
+    DocumentInfo,
     DocumentUploadResultItem,
 )
 
@@ -68,5 +69,6 @@ __all__ = [
     "FingerprintStatus",
     "BatchDetail",
     "PlatformStats",
+    "DocumentInfo",
     "DocumentUploadResultItem",
 ]

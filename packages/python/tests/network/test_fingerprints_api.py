@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from constellation_digital_evidence_sdk.network import DedClient
+from constellation_digital_evidence_sdk.network import DedClient, DocumentInfo
 from constellation_digital_evidence_sdk.network.types import DedClientConfig, FingerprintSearchParams
 from constellation_digital_evidence_sdk.network.http_client import DedApiError
 from constellation_digital_evidence_sdk.core.types import (
@@ -130,6 +130,86 @@ class TestFingerprintsApi:
                 params = call_kwargs[1].get("params", {})
                 assert params["document_id"] == "doc-001"
                 assert params["limit"] == "5"
+
+
+class TestUpload:
+    @pytest.mark.asyncio
+    async def test_upload_sends_multipart_with_content_length(self, config, submission):
+        doc_ref = submission.attestation.content.document_ref
+        doc_bytes = b"PDF content here"
+        documents = {doc_ref: DocumentInfo(data=doc_bytes, mime_type="application/pdf")}
+
+        response_data = {
+            "data": [
+                {
+                    "eventId": "abc",
+                    "hash": "def",
+                    "accepted": True,
+                    "errors": [],
+                    "document": {
+                        "s3Key": "org/tenant/2024/01/abc",
+                        "contentType": "application/pdf",
+                        "fileSize": len(doc_bytes),
+                        "uploadedAt": "2024-01-15T10:30:00Z",
+                    },
+                }
+            ]
+        }
+
+        async with DedClient(config) as client:
+            with patch.object(
+                client._http._client,
+                "request",
+                new_callable=AsyncMock,
+                return_value=_mock_response(response_data),
+            ) as mock_req:
+                result = await client.fingerprints.upload([submission], documents)
+
+                assert result == response_data
+                call_kwargs = mock_req.call_args
+                assert call_kwargs[0][0] == "POST"
+                assert "/v1/fingerprints/upload" in call_kwargs[0][1]
+
+                headers = call_kwargs[1]["headers"]
+                assert headers["X-Api-Key"] == "test-api-key"
+                assert "multipart/form-data; boundary=" in headers["Content-Type"]
+
+                # Verify the body contains per-part Content-Length headers
+                body = call_kwargs[1]["content"]
+                assert isinstance(body, bytes)
+                assert b'name="fingerprints"' in body
+                assert f'name="{doc_ref}"'.encode() in body
+                assert b"Content-Length:" in body
+                assert doc_bytes in body
+
+    @pytest.mark.asyncio
+    async def test_upload_rejects_unsupported_mime_type(self, config, submission):
+        doc_ref = submission.attestation.content.document_ref
+        documents = {doc_ref: DocumentInfo(data=b"data", mime_type="application/zip")}
+
+        async with DedClient(config) as client:
+            with pytest.raises(ValueError, match="Unsupported mime type"):
+                await client.fingerprints.upload([submission], documents)
+
+    @pytest.mark.asyncio
+    async def test_upload_accepts_all_allowed_mime_types(self, config, submission):
+        """Verify all 10 allowed MIME types pass validation."""
+        from constellation_digital_evidence_sdk.network.fingerprints_api import ALLOWED_MIME_TYPES
+
+        doc_ref = submission.attestation.content.document_ref
+        response_data = {"data": [{"eventId": "abc", "hash": "def", "accepted": True, "errors": []}]}
+
+        for mime in ALLOWED_MIME_TYPES:
+            documents = {doc_ref: DocumentInfo(data=b"x", mime_type=mime)}
+            async with DedClient(config) as client:
+                with patch.object(
+                    client._http._client,
+                    "request",
+                    new_callable=AsyncMock,
+                    return_value=_mock_response(response_data),
+                ):
+                    result = await client.fingerprints.upload([submission], documents)
+                    assert result["data"][0]["accepted"]
 
 
 class TestBatchesApi:

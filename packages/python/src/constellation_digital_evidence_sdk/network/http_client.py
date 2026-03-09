@@ -56,6 +56,19 @@ class DedHttpClient:
             "POST", url, headers=headers, content=json.dumps(body)
         )
 
+    async def post_raw_multipart(
+        self, path: str, body: bytes, content_type: str
+    ) -> Any:
+        """POST raw multipart body with explicit Content-Type (authenticated)."""
+        url = f"{self._base_url}{path}"
+        headers = {
+            "X-Api-Key": self._api_key,
+            "Content-Type": content_type,
+        }
+        return await self._request(
+            "POST", url, headers=headers, raw_content=body
+        )
+
     async def _request(
         self,
         method: str,
@@ -63,9 +76,11 @@ class DedHttpClient:
         headers: dict[str, str] | None = None,
         params: dict[str, str] | None = None,
         content: str | None = None,
+        raw_content: bytes | None = None,
     ) -> Any:
         response = await self._client.request(
-            method, url, headers=headers, params=params, content=content
+            method, url, headers=headers, params=params,
+            content=raw_content or content,
         )
 
         if response.status_code >= 400:
