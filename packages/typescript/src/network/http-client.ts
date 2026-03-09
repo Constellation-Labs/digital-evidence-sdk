@@ -61,6 +61,16 @@ export class DedHttpClient {
     });
   }
 
+  /** POST raw multipart body with explicit Content-Type (authenticated with API key) */
+  async postRawMultipart<T>(path: string, body: Uint8Array, contentType: string): Promise<T> {
+    const url = this.buildUrl(path);
+    return this.request<T>(url, {
+      method: 'POST',
+      rawBody: body,
+      contentType,
+    });
+  }
+
   private buildUrl(path: string, query?: Record<string, string>): string {
     const url = new URL(`${this.baseUrl}${path}`);
     if (query) {
@@ -79,6 +89,7 @@ export class DedHttpClient {
       method: string;
       body?: string;
       contentType?: string;
+      rawBody?: Uint8Array;
       formData?: FormData;
       public?: boolean;
     }
@@ -100,7 +111,7 @@ export class DedHttpClient {
       const response = await fetch(url, {
         method: options.method,
         headers,
-        body: options.formData ?? options.body,
+        body: options.rawBody ?? options.formData ?? options.body,
         signal: controller.signal,
       });
 
