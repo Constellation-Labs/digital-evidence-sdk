@@ -494,6 +494,65 @@ server.resource(
   })
 );
 
+server.resource(
+  "document-upload-docs",
+  "ded://docs/document-upload",
+  {
+    description: "Documentation for document upload requirements, MIME types, size limits, and credit costs",
+    mimeType: "text/plain",
+  },
+  async (uri) => ({
+    contents: [
+      {
+        uri: uri.href,
+        mimeType: "text/plain",
+        text: [
+          "DED Document Upload Guide",
+          "=========================",
+          "",
+          "Documents can be uploaded alongside fingerprint submissions for permanent storage.",
+          "",
+          "Requirements:",
+          "  - API key required (X-Api-Key header)",
+          "  - Paid subscription required (uploads blocked on free tier)",
+          "  - Maximum file size: 10 MB per document",
+          "",
+          "Allowed MIME Types:",
+          "  - application/pdf",
+          "  - application/vnd.openxmlformats-officedocument.wordprocessingml.document (DOCX)",
+          "  - text/plain",
+          "  - image/png",
+          "  - image/jpeg",
+          "  - image/gif",
+          "  - image/webp",
+          "  - application/json",
+          "  - application/xml, text/xml",
+          "  - text/csv",
+          "",
+          "Blocked Types:",
+          "  - Archives (ZIP, GZIP, TAR)",
+          "  - Executables and shell scripts",
+          "",
+          "Credit Costs:",
+          "  - 1 credit per 100 KB of document data (rounded up)",
+          "  - Plus fingerprint submission credits per fingerprint",
+          "",
+          "Upload Format:",
+          "  - Multipart form data",
+          '  - "fingerprints" part: JSON array of FingerprintSubmission objects',
+          "  - One file part per document, keyed by documentRef",
+          "  - Each document must match a fingerprint's documentRef field",
+          "",
+          "Use ded_upload_document to upload documents inline (base64-encoded),",
+          "or prepare fingerprints first with ded_prepare_fingerprint and submit with documents.",
+          "",
+          "Full documentation: https://constellation-main.gitbook.io/digital-evidence/sign-and-submit-data",
+        ].join("\n"),
+      },
+    ],
+  })
+);
+
 // ── MCP Prompts (guided workflows) ──────────────────────────────────
 
 if (config.signingPrivateKey) {
@@ -576,6 +635,37 @@ server.prompt(
     ],
   })
 );
+
+if (config.signingPrivateKey && config.apiKey) {
+  server.prompt(
+    "upload-document",
+    "Guided workflow to upload a file with a fingerprint submission",
+    { filePath: z.string(), contentType: z.string() },
+    async ({ filePath, contentType }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: [
+              `Upload the file "${filePath}" (${contentType}) with a fingerprint:`,
+              ``,
+              `1. Read the file content and call ded_hash_document to get the SHA-256 hash`,
+              `2. Call ded_prepare_fingerprint with the file content, orgId, tenantId, and documentRef set to the filename`,
+              `3. Call ded_upload_document with:`,
+              `   - The prepared fingerprint in the fingerprints array`,
+              `   - A document entry with documentRef matching the fingerprint's documentRef, filePath "${filePath}", and contentType "${contentType}"`,
+              `4. Call ded_track_fingerprint with the fingerprint hash to confirm submission`,
+              ``,
+              `For allowed MIME types and size limits, see: ded://docs/document-upload`,
+              `For full documentation: https://constellation-main.gitbook.io/digital-evidence/sign-and-submit-data`,
+            ].join("\n"),
+          },
+        },
+      ],
+    })
+  );
+}
 
 // ── Start server ────────────────────────────────────────────────────
 
