@@ -214,35 +214,70 @@ export class DedApiClient {
       throw new Error("API key required for document upload");
     }
 
-    const formData = new FormData();
-    formData.append(
-      "fingerprints",
-      new Blob([JSON.stringify(fingerprints)], { type: "application/json" })
+    // Build raw multipart body with per-part Content-Length headers
+    // (required by the DED server for pre-validation before streaming)
+    const boundary = `----DedMcp${crypto.randomUUID().replace(/-/g, "")}`;
+    const encoder = new TextEncoder();
+    const parts: Uint8Array[] = [];
+
+    // Fingerprints JSON part
+    const fingerprintsJson = JSON.stringify(fingerprints);
+    const fingerprintsBytes = encoder.encode(fingerprintsJson);
+    parts.push(
+      encoder.encode(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="fingerprints"\r\n` +
+          `Content-Type: application/json\r\n` +
+          `Content-Length: ${fingerprintsBytes.byteLength}\r\n` +
+          `\r\n`
+      ),
+      fingerprintsBytes,
+      encoder.encode("\r\n")
     );
 
+    // Document parts
     for (const doc of documents) {
-      const bytes = Buffer.from(doc.contentBase64, "base64");
-      formData.append(
-        doc.documentRef,
-        new Blob([bytes], { type: doc.contentType })
+      const docBytes = Buffer.from(doc.contentBase64, "base64");
+      parts.push(
+        encoder.encode(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="${doc.documentRef}"; filename="${doc.documentRef}"\r\n` +
+            `Content-Type: ${doc.contentType}\r\n` +
+            `Content-Length: ${docBytes.byteLength}\r\n` +
+            `\r\n`
+        ),
+        docBytes,
+        encoder.encode("\r\n")
       );
     }
 
+    // Final boundary
+    parts.push(encoder.encode(`--${boundary}--\r\n`));
+
+    // Concatenate all parts
+    const totalLength = parts.reduce((sum, p) => sum + p.byteLength, 0);
+    const body = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const part of parts) {
+      body.set(part, offset);
+      offset += part.byteLength;
+    }
+
     const url = `${this.baseUrl}/v1/fingerprints/upload`;
-    const headers: Record<string, string> = {
-      "X-Api-Key": this.apiKey,
-    };
 
     const response = await fetch(url, {
       method: "POST",
-      headers,
-      body: formData,
+      headers: {
+        "X-Api-Key": this.apiKey,
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+      },
+      body,
     });
 
     if (!response.ok) {
-      const body = await response.text().catch(() => "");
+      const respBody = await response.text().catch(() => "");
       throw new Error(
-        `DED API error: ${response.status} ${response.statusText} - ${body}`
+        `DED API error: ${response.status} ${response.statusText} - ${respBody}`
       );
     }
 

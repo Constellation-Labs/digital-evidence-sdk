@@ -24,6 +24,7 @@ import * as verifyProof from "./tools/verify-proof.js";
 import * as waitBatchStatus from "./tools/wait-batch-status.js";
 import * as downloadDocument from "./tools/download-document.js";
 import * as uploadDocument from "./tools/upload-document.js";
+import * as notarizeDocument from "./tools/notarize-document.js";
 
 const config = loadConfig();
 const client = new DedApiClient(config);
@@ -167,6 +168,13 @@ if (config.signingPrivateKey) {
       notarize.description,
       notarize.inputSchema.shape,
       notarize.register(config.signingPrivateKey, client)
+    );
+
+    server.tool(
+      notarizeDocument.name,
+      notarizeDocument.description,
+      notarizeDocument.inputSchema.shape,
+      notarizeDocument.register(config.signingPrivateKey, client)
     );
   }
 }
