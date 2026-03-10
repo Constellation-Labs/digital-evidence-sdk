@@ -5,7 +5,7 @@ import { fingerprintSubmissionSchema } from "../types/fingerprint-schema.js";
 
 export const name = "ded_submit_fingerprints";
 export const description =
-  "Submit signed fingerprints for cryptographic notarization on the Constellation Network metagraph. Requires an API key. Each fingerprint must include an attestation with content and at least one signature proof.";
+  "Submit signed fingerprints for cryptographic notarization on the Constellation Network metagraph. Requires an API key. Chain: use ded_prepare_fingerprint first to build submissions, pass them here exactly as returned, then ded_track_fingerprint to monitor status. For simpler flows, prefer ded_notarize (text) or ded_notarize_document (files) which handle everything in one call.";
 
 export const inputSchema = z.object({
   fingerprints: z

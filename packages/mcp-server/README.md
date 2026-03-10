@@ -42,7 +42,11 @@ Add to `.mcp.json`, `~/.claude.json`, or `claude_desktop_config.json`:
 Or via the CLI:
 
 ```bash
-claude mcp add ded -- node /absolute/path/to/packages/mcp-server/dist/index.js
+claude mcp add ded \
+  -e DED_API_BASE_URL="$DED_API_BASE_URL" \
+  -e DED_API_KEY="$DED_API_KEY" \
+  -e DED_SIGNING_PRIVATE_KEY_FILE="$DED_SIGNING_PRIVATE_KEY_FILE" \
+  -- node /absolute/path/to/packages/mcp-server/dist/index.js
 ```
 
 ### Cursor
@@ -112,9 +116,9 @@ Add to `.vscode/mcp.json` in your project root:
 | `DED_API_BASE_URL` | No | API base URL (default: `http://localhost:8081`) |
 | `DED_API_KEY` | No | API key — enables authenticated tools (search, submit, validate, upload) |
 | `DED_SIGNING_PRIVATE_KEY` | No | 64-char hex private key — enables signing tools |
-| `DED_SIGNING_PRIVATE_KEY_FILE` | No | Path to a file containing the private key (recommended; use `chmod 600`) |
+| `DED_SIGNING_PRIVATE_KEY_FILE` | No | Path to a file containing the private key — PEM or raw hex (recommended; use `chmod 600`) |
 
-`DED_SIGNING_PRIVATE_KEY_FILE` takes precedence over `DED_SIGNING_PRIVATE_KEY` if both are set.
+`DED_SIGNING_PRIVATE_KEY_FILE` takes precedence over `DED_SIGNING_PRIVATE_KEY` if both are set. The file can be either a PEM-encoded EC private key (SEC1 or PKCS#8) or a raw 64-character hex string. PEM is auto-detected and the secp256k1 private key bytes are extracted automatically.
 
 Tools are registered conditionally based on which credentials are provided:
 
@@ -149,15 +153,16 @@ Tools are registered conditionally based on which credentials are provided:
 | `ded_search_fingerprints` | Search fingerprints by document ID, org, tenant, tags, or date range |
 | `ded_submit_fingerprints` | Submit signed fingerprints for on-chain notarization |
 | `ded_validate_fingerprints` | Dry-run validation of fingerprint submissions |
-| `ded_upload_document` | Upload documents alongside fingerprint submissions |
+| `ded_upload_document` | Upload local files alongside fingerprint submissions (reads from file path) |
 
 ### Signing tools (require `DED_SIGNING_PRIVATE_KEY`)
 
 | Tool | Description |
 |---|---|
 | `ded_sign_fingerprint` | Sign a FingerprintValue using SECP256K1_RFC8785_V1 |
-| `ded_prepare_fingerprint` | Hash, sign, and assemble a complete submission from raw content |
-| `ded_notarize` | All-in-one: hash + sign + submit (also requires `DED_API_KEY`) |
+| `ded_prepare_fingerprint` | Hash, sign, and assemble a complete submission from text content or a file path |
+| `ded_notarize` | All-in-one for text: hash + sign + submit (also requires `DED_API_KEY`) |
+| `ded_notarize_document` | All-in-one for files: reads from file path, hashes raw bytes, signs, and submits (also requires `DED_API_KEY`) |
 
 ## Resources
 
@@ -170,6 +175,7 @@ The server exposes static MCP resources with schema documentation:
 | `ded://docs/signing-protocol` | SECP256K1_RFC8785_V1 signing protocol documentation |
 | `ded://docs/batch-lifecycle` | Batch processing lifecycle and status transitions |
 | `ded://tools/signing-script` | Zero-dependency Node.js signing script |
+| `ded://docs/document-upload` | Document upload guide (MIME types, size limits, credit costs) |
 
 ## Prompts
 
@@ -180,6 +186,7 @@ Guided workflows that chain multiple tools together:
 | `notarize-document` | Hash, sign, submit, and track a document (requires signing key) |
 | `verify-document` | Look up a fingerprint and verify its on-chain proof |
 | `audit-report` | Generate a summary of recent fingerprinting activity |
+| `upload-document` | Upload a local file with a fingerprint (requires signing key + API key) |
 
 ## Common workflows
 

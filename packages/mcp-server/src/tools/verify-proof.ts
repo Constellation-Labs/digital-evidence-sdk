@@ -3,7 +3,7 @@ import type { DedApiClient } from "../api-client.js";
 
 export const name = "ded_verify_proof";
 export const description =
-  "Verify the Merkle Patricia Trie inclusion proof for a fingerprint. Fetches the proof, validates its structure, and checks it against the batch root.";
+  "Verify the Merkle Patricia Trie inclusion proof for a fingerprint. Fetches the proof, validates its structure, and checks it against the batch root. The fingerprint must be in FINALIZED_COMMITMENT status. Chain: use ded_get_fingerprint or ded_track_fingerprint first to confirm the fingerprint is finalized, then call this to validate its on-chain proof.";
 
 export const inputSchema = z.object({
   hash: z

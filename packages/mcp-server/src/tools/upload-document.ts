@@ -1,3 +1,5 @@
+import { readFileSync } from "fs";
+import { createHash } from "crypto";
 import { z } from "zod";
 import type { DedApiClient } from "../api-client.js";
 import type { FingerprintSubmission, DocumentInput } from "../types/fingerprint.js";
@@ -5,7 +7,7 @@ import { fingerprintSubmissionSchema } from "../types/fingerprint-schema.js";
 
 export const name = "ded_upload_document";
 export const description =
-  "Upload documents with fingerprint submissions. Each document is base64-encoded and linked to a fingerprint by documentRef. Requires API key. Blocked for free tier.";
+  "Upload documents with fingerprint submissions for storage. Each document is read from a local file path and linked to a fingerprint by documentRef. Requires API key. Chain: use ded_prepare_fingerprint first to build submissions, then pass them here along with file paths. The documentRef in each document must match a fingerprint's documentRef. After upload, use ded_track_fingerprint to monitor status.";
 
 export const inputSchema = z.object({
   fingerprints: z
@@ -18,17 +20,13 @@ export const inputSchema = z.object({
       z.object({
         documentRef: z
           .string()
-          .describe("Must match a fingerprint's documentRef"),
-        contentBase64: z
+          .describe("Must match a fingerprint's documentRef (hex-encoded SHA-256 hash)"),
+        filePath: z
           .string()
-          .describe("Base64-encoded document content"),
+          .describe("Absolute path to the file to upload"),
         contentType: z
           .string()
           .describe("MIME type (e.g. application/pdf)"),
-        expectedHash: z
-          .string()
-          .regex(/^[0-9a-fA-F]{64}$/)
-          .describe("SHA-256 hex of decoded content"),
       })
     )
     .min(1)
@@ -37,9 +35,20 @@ export const inputSchema = z.object({
 
 export function register(client: DedApiClient) {
   return async (args: z.infer<typeof inputSchema>) => {
+    const documents: DocumentInput[] = args.documents.map((doc) => {
+      const fileBytes = readFileSync(doc.filePath);
+      const hash = createHash("sha256").update(fileBytes).digest("hex");
+      return {
+        documentRef: doc.documentRef,
+        contentBase64: fileBytes.toString("base64"),
+        contentType: doc.contentType,
+        expectedHash: hash,
+      };
+    });
+
     const results = await client.uploadDocuments(
       args.fingerprints as FingerprintSubmission[],
-      args.documents as DocumentInput[]
+      documents
     );
     return {
       content: [
