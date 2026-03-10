@@ -4,17 +4,32 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from typing import Any
 
 from ..core.types import FingerprintSubmission, FingerprintSubmissionResult
 from .http_client import DedHttpClient
 from .types import (
+    DocumentInfo,
     FingerprintDetail,
     FingerprintProof,
     FingerprintSearchParams,
     FingerprintStatus,
     PlatformStats,
 )
+
+ALLOWED_MIME_TYPES = frozenset({
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "application/json",
+    "application/xml",
+    "text/csv",
+})
 
 
 class FingerprintsApi:
@@ -81,6 +96,74 @@ class FingerprintsApi:
         """
         body = [s.to_dict() for s in submissions]
         return await self._http.post("/v1/fingerprints/validate", body)
+
+    async def upload(
+        self,
+        submissions: list[FingerprintSubmission],
+        documents: dict[str, DocumentInfo],
+    ) -> dict[str, Any]:
+        """Upload fingerprints with associated documents (multipart).
+
+        Args:
+            submissions: Fingerprint submissions.
+            documents: Map of documentRef (SHA-256 hex) to DocumentInfo.
+
+        Returns:
+            Response dict with ``data`` containing list of upload result items.
+
+        Raises:
+            ValueError: If a document has an unsupported MIME type.
+        """
+        for doc_ref, doc_info in documents.items():
+            if doc_info.mime_type not in ALLOWED_MIME_TYPES:
+                raise ValueError(
+                    f'Unsupported mime type "{doc_info.mime_type}" for document '
+                    f'"{doc_ref}". Allowed: {", ".join(sorted(ALLOWED_MIME_TYPES))}'
+                )
+
+        boundary = f"----PythonDedSdk{uuid.uuid4().hex}"
+        parts: list[bytes] = []
+
+        # Fingerprints JSON part
+        fingerprints_bytes = json.dumps(
+            [s.to_dict() for s in submissions]
+        ).encode("utf-8")
+        parts.append(
+            (
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="fingerprints"\r\n'
+                f"Content-Type: application/json\r\n"
+                f"Content-Length: {len(fingerprints_bytes)}\r\n"
+                f"\r\n"
+            ).encode("utf-8")
+        )
+        parts.append(fingerprints_bytes)
+        parts.append(b"\r\n")
+
+        # Document parts
+        for doc_ref, doc_info in documents.items():
+            parts.append(
+                (
+                    f"--{boundary}\r\n"
+                    f'Content-Disposition: form-data; name="{doc_ref}"; '
+                    f'filename="{doc_ref}"\r\n'
+                    f"Content-Type: {doc_info.mime_type}\r\n"
+                    f"Content-Length: {len(doc_info.data)}\r\n"
+                    f"\r\n"
+                ).encode("utf-8")
+            )
+            parts.append(doc_info.data)
+            parts.append(b"\r\n")
+
+        # Final boundary
+        parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+
+        body = b"".join(parts)
+        content_type = f"multipart/form-data; boundary={boundary}"
+
+        return await self._http.post_raw_multipart(
+            "/v1/fingerprints/upload", body, content_type
+        )
 
     async def search(self, params: FingerprintSearchParams) -> dict[str, Any]:
         """Search fingerprints with filtering and pagination.
