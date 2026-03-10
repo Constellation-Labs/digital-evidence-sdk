@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const name = "ded_hash_document";
 export const description =
-  "Compute the SHA-256 hash of arbitrary text content. Returns the same hash format used as documentId in fingerprint submissions.";
+  "Compute the SHA-256 hash of arbitrary text content. Returns the same hash format used as documentId in fingerprint submissions. For text notarization, prefer ded_notarize which hashes and submits in one step. For files, use ded_notarize_document which hashes raw bytes from disk.";
 
 export const inputSchema = z.object({
   content: z.string().describe("The raw text content to hash"),

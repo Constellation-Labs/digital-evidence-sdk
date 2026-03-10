@@ -3,7 +3,7 @@ import type { DedApiClient } from "../api-client.js";
 
 export const name = "ded_track_fingerprint";
 export const description =
-  "Track the lifecycle status of a fingerprint in natural language. Returns a human-friendly status string explaining where the fingerprint is in the processing pipeline.";
+  "Track the lifecycle status of a fingerprint in natural language. Returns a human-friendly status string explaining where the fingerprint is in the processing pipeline. Call this after ded_submit_fingerprints, ded_notarize, or ded_notarize_document to confirm submission status. Use ded_verify_proof once finalized to validate the on-chain proof.";
 
 export const inputSchema = z.object({
   hash: z

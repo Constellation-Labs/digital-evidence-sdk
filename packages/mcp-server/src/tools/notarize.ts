@@ -4,7 +4,7 @@ import type { DedApiClient } from "../api-client.js";
 
 export const name = "ded_notarize";
 export const description =
-  "All-in-one notarization: hashes the content, builds a FingerprintSubmission, signs it, computes the metadata hash, and submits it to the DED API. Returns the submission result. Requires both DED_SIGNING_PRIVATE_KEY and DED_API_KEY.";
+  "All-in-one notarization for text or small content: hashes the content string, builds a FingerprintSubmission, signs it, and submits to the DED API. For file uploads (images, PDFs, binary files), use ded_prepare_fingerprint + ded_upload_document instead. Requires both DED_SIGNING_PRIVATE_KEY and DED_API_KEY.";
 
 export const inputSchema = z.object({
   content: z.string().describe("The raw document text to notarize"),
@@ -12,7 +12,8 @@ export const inputSchema = z.object({
   tenantId: z.string().uuid().describe("Tenant UUID"),
   documentRef: z
     .string()
-    .describe("Document reference (e.g., filename or URI)"),
+    .optional()
+    .describe("Hex-encoded document reference. Defaults to the SHA-256 hash of the content when omitted."),
   tags: z
     .record(z.string())
     .optional()
@@ -27,7 +28,7 @@ export function register(privateKey: string, client: DedApiClient) {
         tenantId: args.tenantId,
         eventId: crypto.randomUUID(),
         documentId: hashDocument(args.content),
-        documentRef: args.documentRef,
+        documentRef: args.documentRef ?? hashDocument(args.content),
         includeMetadata: true,
         tags: args.tags,
       },
