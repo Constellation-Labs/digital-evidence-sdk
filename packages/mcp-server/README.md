@@ -149,7 +149,7 @@ Tools are registered conditionally based on which credentials are provided:
 | `ded_search_fingerprints` | Search fingerprints by document ID, org, tenant, tags, or date range |
 | `ded_submit_fingerprints` | Submit signed fingerprints for on-chain notarization |
 | `ded_validate_fingerprints` | Dry-run validation of fingerprint submissions |
-| `ded_upload_document` | Upload documents alongside fingerprint submissions |
+| `ded_upload_document` | Upload local files alongside fingerprint submissions (reads from file path) |
 
 ### Signing tools (require `DED_SIGNING_PRIVATE_KEY`)
 
@@ -170,6 +170,7 @@ The server exposes static MCP resources with schema documentation:
 | `ded://docs/signing-protocol` | SECP256K1_RFC8785_V1 signing protocol documentation |
 | `ded://docs/batch-lifecycle` | Batch processing lifecycle and status transitions |
 | `ded://tools/signing-script` | Zero-dependency Node.js signing script |
+| `ded://docs/document-upload` | Document upload guide (MIME types, size limits, credit costs) |
 
 ## Prompts
 
@@ -180,6 +181,7 @@ Guided workflows that chain multiple tools together:
 | `notarize-document` | Hash, sign, submit, and track a document (requires signing key) |
 | `verify-document` | Look up a fingerprint and verify its on-chain proof |
 | `audit-report` | Generate a summary of recent fingerprinting activity |
+| `upload-document` | Upload a local file with a fingerprint (requires signing key + API key) |
 
 ## Common workflows
 
