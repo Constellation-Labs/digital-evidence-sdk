@@ -176,6 +176,7 @@ The server exposes static MCP resources with schema documentation:
 | `ded://docs/batch-lifecycle` | Batch processing lifecycle and status transitions |
 | `ded://tools/signing-script` | Zero-dependency Node.js signing script |
 | `ded://docs/document-upload` | Document upload guide (MIME types, size limits, credit costs) |
+| `ded://docs/x402-payment` | x402 pay-per-request protocol (alternative to API key subscriptions) |
 
 ## Prompts
 
@@ -217,6 +218,25 @@ ded_wait_batch_status({ batchId: "batch-uuid", maxWaitSeconds: 60 })
 ```
 
 Polls every 3 seconds until the batch reaches `FINALIZED_COMMITMENT` or `ERRORED_COMMITMENT`.
+
+## x402 pay-per-request
+
+As an alternative to API key authentication, the DED REST API supports [x402](https://www.x402.org/) pay-per-request payments. This allows callers to submit fingerprints, upload documents, and search without an API key or subscription — paying per request with USDC on Base.
+
+| Feature            | API Key + Subscription | x402 Pay-Per-Request     |
+| ---                | ---                    | ---                      |
+| Account required   | Yes                    | No                       |
+| Billing model      | Monthly subscription   | Per-request USDC payment |
+| Org/tenant         | Pre-provisioned        | Auto-created from wallet |
+| Upload support     | Paid tiers only        | Always available         |
+
+**Pricing:** 1 credit = $0.01 USD (10,000 atomic USDC)
+
+- Fingerprint submission: 2 credits ($0.02) each
+- Document upload: fingerprint credits + 1 credit per 100 KB
+- Search query: 1 credit ($0.01)
+
+See the `ded://docs/x402-payment` resource for the full two-step payment flow and client implementation details.
 
 ## Architecture
 
