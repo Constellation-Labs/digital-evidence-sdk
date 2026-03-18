@@ -113,37 +113,35 @@ server.tool(
   downloadDocument.register(client)
 );
 
-// ── Authenticated tools (require API key) ────────────────────────────
+// ── Paid tools (require API key or x402 payment) ─────────────────────
 
-if (config.apiKey) {
-  server.tool(
-    searchFingerprints.name,
-    searchFingerprints.description,
-    searchFingerprints.inputSchema.shape,
-    searchFingerprints.register(client)
-  );
+server.tool(
+  searchFingerprints.name,
+  searchFingerprints.description,
+  searchFingerprints.inputSchema.shape,
+  searchFingerprints.register(client)
+);
 
-  server.tool(
-    submitFingerprints.name,
-    submitFingerprints.description,
-    submitFingerprints.inputSchema.shape,
-    submitFingerprints.register(client)
-  );
+server.tool(
+  submitFingerprints.name,
+  submitFingerprints.description,
+  submitFingerprints.inputSchema.shape,
+  submitFingerprints.register(client)
+);
 
-  server.tool(
-    validateFingerprints.name,
-    validateFingerprints.description,
-    validateFingerprints.inputSchema.shape,
-    validateFingerprints.register(client)
-  );
+server.tool(
+  validateFingerprints.name,
+  validateFingerprints.description,
+  validateFingerprints.inputSchema.shape,
+  validateFingerprints.register(client)
+);
 
-  server.tool(
-    uploadDocument.name,
-    uploadDocument.description,
-    uploadDocument.inputSchema.shape,
-    uploadDocument.register(client)
-  );
-}
+server.tool(
+  uploadDocument.name,
+  uploadDocument.description,
+  uploadDocument.inputSchema.shape,
+  uploadDocument.register(client)
+);
 
 // ── Local-only signing tools (require private key) ───────────────────
 
@@ -162,21 +160,19 @@ if (config.signingPrivateKey) {
     prepareFingerprint.register(config.signingPrivateKey)
   );
 
-  if (config.apiKey) {
-    server.tool(
-      notarize.name,
-      notarize.description,
-      notarize.inputSchema.shape,
-      notarize.register(config.signingPrivateKey, client)
-    );
+  server.tool(
+    notarize.name,
+    notarize.description,
+    notarize.inputSchema.shape,
+    notarize.register(config.signingPrivateKey, client)
+  );
 
-    server.tool(
-      notarizeDocument.name,
-      notarizeDocument.description,
-      notarizeDocument.inputSchema.shape,
-      notarizeDocument.register(config.signingPrivateKey, client)
-    );
-  }
+  server.tool(
+    notarizeDocument.name,
+    notarizeDocument.description,
+    notarizeDocument.inputSchema.shape,
+    notarizeDocument.register(config.signingPrivateKey, client)
+  );
 }
 
 // ── MCP Resources (static context) ──────────────────────────────────
@@ -675,6 +671,18 @@ server.resource(
           "  4. Retry with the PAYMENT-SIGNATURE header containing the base64-encoded PaymentPayload",
           "  5. The PaymentPayload must include the exact amount from the 402 response (or more)",
           "",
+          "─── Using x402 with MCP Tools ─────────────────────────────────────",
+          "",
+          "When no DED_API_KEY is configured, paid MCP tools (ded_submit_fingerprints,",
+          "ded_search_fingerprints, ded_validate_fingerprints, ded_upload_document,",
+          "ded_notarize, ded_notarize_document) support x402 as a two-call flow:",
+          "",
+          "  1. Call the tool without paymentSignature — the tool makes the request,",
+          "     receives HTTP 402, and returns the payment requirement details",
+          "  2. Authorize the payment externally using the returned details",
+          "  3. Call the same tool again with the paymentSignature parameter set to",
+          "     the base64-encoded PaymentPayload — the tool completes the request",
+          "",
           "The x402 protocol is defined at https://www.x402.org/",
           "",
           "Full documentation: https://constellation-main.gitbook.io/digital-evidence/",
@@ -773,7 +781,7 @@ server.prompt(
   })
 );
 
-if (config.signingPrivateKey && config.apiKey) {
+if (config.signingPrivateKey) {
   server.prompt(
     "upload-document",
     "Guided workflow to upload a file with a fingerprint submission",
