@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { loadConfig } from "./config.js";
 import { DedApiClient } from "./api-client.js";
+import { SIGNING_SCRIPT } from "./signing-script.js";
 
 import * as getStats from "./tools/get-stats.js";
 import * as getLatest from "./tools/get-latest.js";
@@ -25,6 +26,10 @@ import * as waitBatchStatus from "./tools/wait-batch-status.js";
 import * as downloadDocument from "./tools/download-document.js";
 import * as uploadDocument from "./tools/upload-document.js";
 import * as notarizeDocument from "./tools/notarize-document.js";
+import * as prepareUnsignedFingerprint from "./tools/prepare-unsigned-fingerprint.js";
+import * as signLocal from "./tools/sign-local.js";
+import * as submitFingerprintScript from "./tools/submit-fingerprint-script.js";
+import * as uploadDocumentScript from "./tools/upload-document-script.js";
 
 const config = loadConfig();
 const client = new DedApiClient(config);
@@ -141,6 +146,38 @@ server.tool(
   uploadDocument.description,
   uploadDocument.inputSchema.shape,
   uploadDocument.register(client)
+);
+
+// ── Unsigned preparation & local signing (no private key needed) ─────
+
+server.tool(
+  prepareUnsignedFingerprint.name,
+  prepareUnsignedFingerprint.description,
+  prepareUnsignedFingerprint.inputSchema.shape,
+  prepareUnsignedFingerprint.register()
+);
+
+server.tool(
+  signLocal.name,
+  signLocal.description,
+  signLocal.inputSchema.shape,
+  signLocal.register()
+);
+
+// ── Script generation tools (no private key needed on server) ────────
+
+server.tool(
+  submitFingerprintScript.name,
+  submitFingerprintScript.description,
+  submitFingerprintScript.inputSchema.shape,
+  submitFingerprintScript.register(config.apiBaseUrl)
+);
+
+server.tool(
+  uploadDocumentScript.name,
+  uploadDocumentScript.description,
+  uploadDocumentScript.inputSchema.shape,
+  uploadDocumentScript.register(config.apiBaseUrl)
 );
 
 // ── Local-only signing tools (require private key) ───────────────────
@@ -316,107 +353,6 @@ server.resource(
     ],
   })
 );
-
-const SIGNING_SCRIPT = `#!/usr/bin/env node
-// ded-sign.js — Self-contained DED signing script (Node.js 18+, zero npm dependencies)
-//
-// Usage:
-//   node ded-sign.js sign   <privateKeyHex> '<fingerprintValueJson>'
-//   node ded-sign.js keygen
-//
-// The sign command outputs a SignatureProof JSON object:
-//   { "id": "<publicKeyHex>", "signature": "<signatureHex>", "algorithm": "SECP256K1_RFC8785_V1" }
-//
-// The keygen command outputs a new keypair:
-//   { "privateKey": "<hex>", "publicKey": "<hex>" }
-
-"use strict";
-
-const crypto = require("crypto");
-
-// ── RFC 8785 JSON Canonicalization ──────────────────────────────────
-// Implements https://www.rfc-editor.org/rfc/rfc8785
-
-function canonicalize(value) {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return "[" + value.map((v) => canonicalize(v)).join(",") + "]";
-  }
-  const keys = Object.keys(value).sort();
-  const entries = keys
-    .filter((k) => value[k] !== undefined)
-    .map((k) => JSON.stringify(k) + ":" + canonicalize(value[k]));
-  return "{" + entries.join(",") + "}";
-}
-
-// ── secp256k1 helpers ───────────────────────────────────────────────
-
-function buildSec1Der(privateKeyBuf) {
-  const ver = Buffer.from([0x02, 0x01, 0x01]);
-  const key = Buffer.concat([Buffer.from([0x04, 0x20]), privateKeyBuf]);
-  const oid = Buffer.from([0xa0, 0x07, 0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x0a]);
-  const inner = Buffer.concat([ver, key, oid]);
-  return Buffer.concat([Buffer.from([0x30, inner.length]), inner]);
-}
-
-function getPublicKey(privateKeyHex) {
-  const ecdh = crypto.createECDH("secp256k1");
-  ecdh.setPrivateKey(Buffer.from(privateKeyHex, "hex"));
-  return ecdh.getPublicKey().subarray(1).toString("hex");
-}
-
-function makeKeyObject(privateKeyHex) {
-  const der = buildSec1Der(Buffer.from(privateKeyHex, "hex"));
-  return crypto.createPrivateKey({ key: der, format: "der", type: "sec1" });
-}
-
-// ── SECP256K1_RFC8785_V1 signing protocol ───────────────────────────
-
-function sign(fingerprintValue, privateKeyHex) {
-  const canonical = canonicalize(fingerprintValue);
-  const sha256Hex = crypto.createHash("sha256").update(canonical, "utf8").digest("hex");
-  const digest = crypto.createHash("sha512").update(sha256Hex, "utf8").digest().subarray(0, 32);
-  const sig = crypto.sign(null, digest, makeKeyObject(privateKeyHex));
-  return {
-    id: getPublicKey(privateKeyHex),
-    signature: sig.toString("hex"),
-    algorithm: "SECP256K1_RFC8785_V1",
-  };
-}
-
-// ── Key generation ──────────────────────────────────────────────────
-
-function keygen() {
-  const ecdh = crypto.createECDH("secp256k1");
-  ecdh.generateKeys();
-  return {
-    privateKey: ecdh.getPrivateKey().toString("hex"),
-    publicKey: ecdh.getPublicKey().subarray(1).toString("hex"),
-  };
-}
-
-// ── CLI ─────────────────────────────────────────────────────────────
-
-const [, , command, ...args] = process.argv;
-
-if (command === "sign") {
-  const [privateKey, contentJson] = args;
-  if (!privateKey || !contentJson) {
-    console.error("Usage: node ded-sign.js sign <privateKeyHex> '<fingerprintValueJson>'");
-    process.exit(1);
-  }
-  const proof = sign(JSON.parse(contentJson), privateKey);
-  console.log(JSON.stringify(proof, null, 2));
-} else if (command === "keygen") {
-  console.log(JSON.stringify(keygen(), null, 2));
-} else {
-  console.error("Usage:");
-  console.error("  node ded-sign.js sign   <privateKeyHex> '<fingerprintValueJson>'");
-  console.error("  node ded-sign.js keygen");
-  process.exit(1);
-}`;
 
 server.resource(
   "signing-script",
@@ -684,6 +620,83 @@ server.resource(
           "     the base64-encoded PaymentPayload — the tool completes the request",
           "",
           "The x402 protocol is defined at https://www.x402.org/",
+          "",
+          "Full documentation: https://constellation-main.gitbook.io/digital-evidence/",
+        ].join("\n"),
+      },
+    ],
+  })
+);
+
+server.resource(
+  "authentication-docs",
+  "ded://docs/authentication",
+  {
+    description:
+      "Guide to DED authentication options: API key subscriptions vs x402 pay-per-request micropayments",
+    mimeType: "text/plain",
+  },
+  async (uri) => ({
+    contents: [
+      {
+        uri: uri.href,
+        mimeType: "text/plain",
+        text: [
+          "DED Authentication Guide",
+          "========================",
+          "",
+          "Two authentication methods are available for paid operations (submit, search,",
+          "validate, upload). Read-only operations are always free and unauthenticated.",
+          "",
+          "─── Option 1: API Key + Subscription ──────────────────────────────",
+          "",
+          "Best for ongoing use. Set the DED_API_KEY environment variable.",
+          "",
+          "  - Sign up and subscribe at the DED portal",
+          "  - The API key is passed as X-Api-Key header on every request",
+          "  - orgId and tenantId are provided as tool parameters",
+          "  - Credits are deducted per operation from your subscription",
+          "",
+          "MCP tools using API key: ded_submit_fingerprints, ded_search_fingerprints,",
+          "ded_validate_fingerprints, ded_upload_document, ded_notarize, ded_notarize_document",
+          "",
+          "─── Option 2: x402 Pay-Per-Request ────────────────────────────────",
+          "",
+          "Best for one-off submissions, integrations, or programmatic agents.",
+          "No account or subscription needed — pay per request with USDC on Base.",
+          "",
+          "Two ways to use x402 with MCP tools:",
+          "",
+          "  A. Inline x402 (two-call flow):",
+          "     1. Call a paid tool without paymentSignature — get payment details back",
+          "     2. Authorize payment externally",
+          "     3. Re-call the tool with paymentSignature parameter",
+          "",
+          "  B. Script generation:",
+          "     Call ded_submit_fingerprint_script or ded_upload_document_script",
+          "     with walletAddress parameter — get a self-contained Node.js script",
+          "     that handles the x402 payment flow automatically",
+          "",
+          "See ded://docs/x402-payment for full protocol details and pricing.",
+          "",
+          "─── Authenticated tools / endpoints ───────────────────────────────",
+          "",
+          "Require API key OR x402 payment:",
+          "  POST /fingerprints           — ded_submit_fingerprints",
+          "  POST /fingerprints/validate  — ded_validate_fingerprints",
+          "  POST /fingerprints/upload    — ded_upload_document",
+          "  GET  /query/fingerprints     — ded_search_fingerprints",
+          "",
+          "Script generation (require API key or walletAddress parameter):",
+          "  ded_submit_fingerprint_script, ded_upload_document_script",
+          "",
+          "─── Free tools (no auth needed) ────────────────────────────────────",
+          "",
+          "  ded_get_stats, ded_get_latest_fingerprints, ded_get_fingerprint,",
+          "  ded_get_fingerprint_proof, ded_get_batch, ded_get_batch_fingerprints,",
+          "  ded_track_fingerprint, ded_wait_batch_status, ded_verify_proof,",
+          "  ded_download_document, ded_hash_document, ded_prepare_unsigned_fingerprint,",
+          "  ded_sign_local",
           "",
           "Full documentation: https://constellation-main.gitbook.io/digital-evidence/",
         ].join("\n"),
