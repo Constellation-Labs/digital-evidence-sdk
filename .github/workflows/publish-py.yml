@@ -9,12 +9,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v6
-        with:
-          submodules: recursive
 
       - uses: actions/setup-python@v6
         with:
@@ -23,14 +21,28 @@ jobs:
       - name: Install build tools
         run: pip install build twine
 
-      - name: Install metakit-sdk
-        run: pip install -e vendor/metakit-sdk/packages/python
-
       - name: Install and test
         working-directory: packages/python
         run: |
           pip install -e ".[dev]"
           pytest tests/ -v
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#py-v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Verify package version matches tag
+        working-directory: packages/python
+        run: |
+          PACKAGE_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [[ "$PACKAGE_VERSION" != "${{ steps.version.outputs.version }}" ]]; then
+            echo "::error::Package version ($PACKAGE_VERSION) does not match tag (${{ steps.version.outputs.version }})"
+            exit 1
+          fi
 
       - name: Build
         working-directory: packages/python
@@ -40,3 +52,11 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: packages/python/dist/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Python SDK v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
