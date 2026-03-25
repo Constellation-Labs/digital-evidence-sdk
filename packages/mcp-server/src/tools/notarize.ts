@@ -4,7 +4,7 @@ import type { DedApiClient } from "../api-client.js";
 
 export const name = "ded_notarize";
 export const description =
-  "All-in-one notarization for text or small content: hashes the content string, builds a FingerprintSubmission, signs it, and submits to the DED API. For file uploads (images, PDFs, binary files), use ded_prepare_fingerprint + ded_upload_document instead. Requires both DED_SIGNING_PRIVATE_KEY and DED_API_KEY.";
+  "All-in-one notarization for text or small content: hashes the content string, builds a FingerprintSubmission, signs it, and submits to the DED API. For file uploads (images, PDFs, binary files), use ded_prepare_fingerprint + ded_upload_document instead. Requires DED_SIGNING_PRIVATE_KEY and either DED_API_KEY or x402 payment.";
 
 export const inputSchema = z.object({
   content: z.string().describe("The raw document text to notarize"),
@@ -18,6 +18,12 @@ export const inputSchema = z.object({
     .record(z.string())
     .optional()
     .describe("Optional metadata tags as key-value pairs"),
+  paymentSignature: z
+    .string()
+    .optional()
+    .describe(
+      "Base64-encoded x402 PaymentPayload for pay-per-request (omit if using API key)"
+    ),
 });
 
 export function register(privateKey: string, client: DedApiClient) {
@@ -35,14 +41,38 @@ export function register(privateKey: string, client: DedApiClient) {
       privateKey
     );
 
-    const results = await client.submitFingerprints([submission]);
+    const result = await client.submitFingerprints(
+      [submission],
+      args.paymentSignature
+    );
+
+    if (result.kind === "payment_required") {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                x402PaymentRequired: true,
+                ...result.payment,
+                submission,
+                instructions:
+                  "Authorize payment for the amount shown, then re-invoke this tool with paymentSignature set to the base64-encoded PaymentPayload. See ded://docs/x402-payment for details.",
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
 
     return {
       content: [
         {
           type: "text" as const,
           text: JSON.stringify(
-            { submission, results },
+            { submission, results: result.data },
             null,
             2
           ),

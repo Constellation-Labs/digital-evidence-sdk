@@ -1,9 +1,10 @@
 import { z } from "zod";
 import type { DedApiClient } from "../api-client.js";
+import { formatPaymentOr } from "./x402-helpers.js";
 
 export const name = "ded_search_fingerprints";
 export const description =
-  "Search fingerprints with filters. Requires an API key. Supports pagination via cursor. Returns fingerprint summaries matching the search criteria.";
+  "Search fingerprints with filters. Requires API key or x402 payment. Supports pagination via cursor. Returns fingerprint summaries matching the search criteria.";
 
 export const inputSchema = z.object({
   documentId: z.string().optional().describe("Filter by document ID"),
@@ -36,15 +37,18 @@ export const inputSchema = z.object({
     .boolean()
     .default(true)
     .describe("Pagination direction: true for next page, false for previous"),
+  paymentSignature: z
+    .string()
+    .optional()
+    .describe(
+      "Base64-encoded x402 PaymentPayload for pay-per-request (omit if using API key)"
+    ),
 });
 
 export function register(client: DedApiClient) {
   return async (args: z.infer<typeof inputSchema>) => {
-    const result = await client.searchFingerprints(args);
-    return {
-      content: [
-        { type: "text" as const, text: JSON.stringify(result, null, 2) },
-      ],
-    };
+    const { paymentSignature, ...params } = args;
+    const result = await client.searchFingerprints(params, paymentSignature);
+    return formatPaymentOr(result);
   };
 }

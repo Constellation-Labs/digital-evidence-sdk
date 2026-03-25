@@ -4,10 +4,11 @@ import { z } from "zod";
 import type { DedApiClient } from "../api-client.js";
 import type { FingerprintSubmission, DocumentInput } from "../types/fingerprint.js";
 import { fingerprintSubmissionSchema } from "../types/fingerprint-schema.js";
+import { formatPaymentOr } from "./x402-helpers.js";
 
 export const name = "ded_upload_document";
 export const description =
-  "Upload documents with fingerprint submissions for storage. Each document is read from a local file path and linked to a fingerprint by documentRef. Requires API key. Chain: use ded_prepare_fingerprint first to build submissions, then pass them here along with file paths. The documentRef in each document must match a fingerprint's documentRef. After upload, use ded_track_fingerprint to monitor status.";
+  "Upload documents with fingerprint submissions for storage. Each document is read from a local file path and linked to a fingerprint by documentRef. Requires API key or x402 payment. Chain: use ded_prepare_fingerprint first to build submissions, then pass them here along with file paths. The documentRef in each document must match a fingerprint's documentRef. After upload, use ded_track_fingerprint to monitor status.";
 
 export const inputSchema = z.object({
   fingerprints: z
@@ -31,6 +32,12 @@ export const inputSchema = z.object({
     )
     .min(1)
     .describe("Documents to upload, each linked to a fingerprint by documentRef"),
+  paymentSignature: z
+    .string()
+    .optional()
+    .describe(
+      "Base64-encoded x402 PaymentPayload for pay-per-request (omit if using API key)"
+    ),
 });
 
 export function register(client: DedApiClient) {
@@ -46,14 +53,11 @@ export function register(client: DedApiClient) {
       };
     });
 
-    const results = await client.uploadDocuments(
+    const result = await client.uploadDocuments(
       args.fingerprints as FingerprintSubmission[],
-      documents
+      documents,
+      args.paymentSignature
     );
-    return {
-      content: [
-        { type: "text" as const, text: JSON.stringify(results, null, 2) },
-      ],
-    };
+    return formatPaymentOr(result);
   };
 }
