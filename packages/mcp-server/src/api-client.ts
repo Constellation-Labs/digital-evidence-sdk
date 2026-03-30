@@ -12,14 +12,26 @@ import type {
   DocumentDownloadResult,
 } from "./types/api.js";
 import type { FingerprintSubmission, DocumentInput } from "./types/fingerprint.js";
+import type { X402Signer } from "@constellation-network/digital-evidence-sdk/network";
+import {
+  parsePaymentRequired,
+  buildPaymentHeader,
+} from "@constellation-network/digital-evidence-sdk/network";
 
 export class DedApiClient {
   private baseUrl: string;
   private apiKey?: string;
+  private signer?: X402Signer;
 
-  constructor(config: Config) {
+  constructor(config: Config, signer?: X402Signer) {
     this.baseUrl = config.apiBaseUrl.replace(/\/+$/, "");
     this.apiKey = config.apiKey;
+    this.signer = signer;
+  }
+
+  /** Whether this client can make authenticated requests (API key or x402 signer) */
+  get hasAuth(): boolean {
+    return !!(this.apiKey || this.signer);
   }
 
   private async request<T>(
@@ -38,6 +50,11 @@ export class DedApiClient {
 
     const response = await fetch(url, { ...options, headers });
 
+    // x402 payment flow: if 402 and we have a signer (but no API key), handle payment
+    if (response.status === 402 && this.signer && !this.apiKey) {
+      return this.handlePaymentRequired<T>(response, url, { ...options, headers });
+    }
+
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       throw new Error(
@@ -46,6 +63,38 @@ export class DedApiClient {
     }
 
     return response.json() as Promise<T>;
+  }
+
+  private async handlePaymentRequired<T>(
+    response: Response,
+    url: string,
+    options: RequestInit
+  ): Promise<T> {
+    const paymentInfo = await parsePaymentRequired(response);
+    if (!paymentInfo || paymentInfo.accepts.length === 0) {
+      throw new Error("402 Payment Required but no payment offers received");
+    }
+
+    const offer = paymentInfo.accepts[0];
+    const paymentHeader = await buildPaymentHeader(offer, this.signer!);
+
+    const headers: Record<string, string> = {
+      ...(options.headers as Record<string, string>),
+      "X-PAYMENT": paymentHeader,
+    };
+    // Remove API key header if present (shouldn't be, but defensive)
+    delete headers["X-Api-Key"];
+
+    const retryResponse = await fetch(url, { ...options, headers });
+
+    if (!retryResponse.ok) {
+      const body = await retryResponse.text().catch(() => "");
+      throw new Error(
+        `DED API error: ${retryResponse.status} ${retryResponse.statusText} - ${body}`
+      );
+    }
+
+    return retryResponse.json() as Promise<T>;
   }
 
   async getStats(): Promise<FingerprintGlobalStats> {
@@ -129,9 +178,6 @@ export class DedApiClient {
     cursor?: string;
     forward?: boolean;
   }): Promise<PaginatedDataResponse<FingerprintSummary[]>> {
-    if (!this.apiKey) {
-      throw new Error("API key required for search");
-    }
     const qs = new URLSearchParams();
     if (params.documentId) qs.set("document_id", params.documentId);
     if (params.eventId) qs.set("event_id", params.eventId);
@@ -152,25 +198,18 @@ export class DedApiClient {
   async submitFingerprints(
     submissions: FingerprintSubmission[]
   ): Promise<FingerprintSubmissionResult[]> {
-    if (!this.apiKey) {
-      throw new Error("API key required for submission");
-    }
-    const resp = await this.request<FingerprintSubmissionResult[]>(
+    return this.request<FingerprintSubmissionResult[]>(
       "/fingerprints",
       {
         method: "POST",
         body: JSON.stringify(submissions),
       }
     );
-    return resp;
   }
 
   async validateFingerprints(
     submissions: FingerprintSubmission[]
   ): Promise<unknown> {
-    if (!this.apiKey) {
-      throw new Error("API key required for validation");
-    }
     return this.request("/fingerprints/validate", {
       method: "POST",
       body: JSON.stringify(submissions),
@@ -210,39 +249,102 @@ export class DedApiClient {
     fingerprints: FingerprintSubmission[],
     documents: DocumentInput[]
   ): Promise<DocumentUploadResponse> {
-    if (!this.apiKey) {
-      throw new Error("API key required for document upload");
-    }
+    const boundary = `----DedMcp${crypto.randomUUID().replace(/-/g, "")}`;
+    const encoder = new TextEncoder();
+    const parts: Uint8Array[] = [];
 
-    const formData = new FormData();
-    formData.append(
-      "fingerprints",
-      new Blob([JSON.stringify(fingerprints)], { type: "application/json" })
+    // Fingerprints JSON part
+    const fingerprintsJson = JSON.stringify(fingerprints);
+    const fingerprintsBytes = encoder.encode(fingerprintsJson);
+    parts.push(
+      encoder.encode(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="fingerprints"\r\n` +
+          `Content-Type: application/json\r\n` +
+          `Content-Length: ${fingerprintsBytes.byteLength}\r\n` +
+          `\r\n`
+      ),
+      fingerprintsBytes,
+      encoder.encode("\r\n")
     );
 
+    // Document parts
     for (const doc of documents) {
-      const bytes = Buffer.from(doc.contentBase64, "base64");
-      formData.append(
-        doc.documentRef,
-        new Blob([bytes], { type: doc.contentType })
+      const docBytes = Buffer.from(doc.contentBase64, "base64");
+      parts.push(
+        encoder.encode(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="${doc.documentRef}"; filename="${doc.documentRef}"\r\n` +
+            `Content-Type: ${doc.contentType}\r\n` +
+            `Content-Length: ${docBytes.byteLength}\r\n` +
+            `\r\n`
+        ),
+        docBytes,
+        encoder.encode("\r\n")
       );
+    }
+
+    // Final boundary
+    parts.push(encoder.encode(`--${boundary}--\r\n`));
+
+    // Concatenate all parts
+    const totalLength = parts.reduce((sum, p) => sum + p.byteLength, 0);
+    const body = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const part of parts) {
+      body.set(part, offset);
+      offset += part.byteLength;
     }
 
     const url = `${this.baseUrl}/v1/fingerprints/upload`;
     const headers: Record<string, string> = {
-      "X-Api-Key": this.apiKey,
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
     };
+
+    if (this.apiKey) {
+      headers["X-Api-Key"] = this.apiKey;
+    }
 
     const response = await fetch(url, {
       method: "POST",
       headers,
-      body: formData,
+      body,
     });
 
+    // x402 payment flow for multipart uploads
+    if (response.status === 402 && this.signer && !this.apiKey) {
+      const paymentInfo = await parsePaymentRequired(response);
+      if (!paymentInfo || paymentInfo.accepts.length === 0) {
+        throw new Error("402 Payment Required but no payment offers received");
+      }
+      const offer = paymentInfo.accepts[0];
+      const paymentHeader = await buildPaymentHeader(offer, this.signer);
+
+      const retryHeaders: Record<string, string> = {
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        "X-PAYMENT": paymentHeader,
+      };
+
+      const retryResponse = await fetch(url, {
+        method: "POST",
+        headers: retryHeaders,
+        body,
+      });
+
+      if (!retryResponse.ok) {
+        const respBody = await retryResponse.text().catch(() => "");
+        throw new Error(
+          `DED API error: ${retryResponse.status} ${retryResponse.statusText} - ${respBody}`
+        );
+      }
+
+      return retryResponse.json() as Promise<DocumentUploadResponse>;
+    }
+
     if (!response.ok) {
-      const body = await response.text().catch(() => "");
+      const respBody = await response.text().catch(() => "");
       throw new Error(
-        `DED API error: ${response.status} ${response.statusText} - ${body}`
+        `DED API error: ${response.status} ${response.statusText} - ${respBody}`
       );
     }
 

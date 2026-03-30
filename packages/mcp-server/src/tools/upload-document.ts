@@ -5,7 +5,7 @@ import { fingerprintSubmissionSchema } from "../types/fingerprint-schema.js";
 
 export const name = "ded_upload_document";
 export const description =
-  "Upload documents with fingerprint submissions. Each document is base64-encoded and linked to a fingerprint by documentRef. Requires API key. Blocked for free tier.";
+  "Upload documents with fingerprint submissions. Each document is base64-encoded and linked to a fingerprint by documentRef. Requires API key or x402 wallet.";
 
 export const inputSchema = z.object({
   fingerprints: z

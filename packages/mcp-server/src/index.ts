@@ -3,8 +3,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { ethers } from "ethers";
 import { loadConfig } from "./config.js";
 import { DedApiClient } from "./api-client.js";
+import { createEthersSigner } from "@constellation-network/digital-evidence-sdk/network";
 
 import * as getStats from "./tools/get-stats.js";
 import * as getLatest from "./tools/get-latest.js";
@@ -26,7 +28,10 @@ import * as downloadDocument from "./tools/download-document.js";
 import * as uploadDocument from "./tools/upload-document.js";
 
 const config = loadConfig();
-const client = new DedApiClient(config);
+const signer = config.walletPrivateKey
+  ? createEthersSigner(new ethers.Wallet(config.walletPrivateKey))
+  : undefined;
+const client = new DedApiClient(config, signer);
 
 const server = new McpServer({
   name: "ded-fingerprint-services",
@@ -112,9 +117,9 @@ server.tool(
   downloadDocument.register(client)
 );
 
-// ── Authenticated tools (require API key) ────────────────────────────
+// ── Authenticated tools (require API key or x402 wallet) ─────────────
 
-if (config.apiKey) {
+if (client.hasAuth) {
   server.tool(
     searchFingerprints.name,
     searchFingerprints.description,
@@ -161,7 +166,7 @@ if (config.signingPrivateKey) {
     prepareFingerprint.register(config.signingPrivateKey)
   );
 
-  if (config.apiKey) {
+  if (client.hasAuth) {
     server.tool(
       notarize.name,
       notarize.description,

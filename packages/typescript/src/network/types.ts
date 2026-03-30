@@ -2,12 +2,16 @@
  * Network module types — API configuration, response shapes, and search parameters.
  */
 
+import type { X402Signer } from './x402';
+
 /** Configuration for the DED API client */
 export interface DedClientConfig {
   /** Base URL of the DED Ingestion API (e.g. "http://localhost:8081") */
   baseUrl: string;
   /** API key for authenticated endpoints (sent via X-Api-Key header) */
-  apiKey: string;
+  apiKey?: string;
+  /** x402 signer for pay-per-request authentication (alternative to apiKey) */
+  signer?: X402Signer;
   /** Request timeout in milliseconds (default: 30000) */
   timeout?: number;
 }

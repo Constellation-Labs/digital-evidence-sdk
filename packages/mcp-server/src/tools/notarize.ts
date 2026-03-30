@@ -4,7 +4,7 @@ import type { DedApiClient } from "../api-client.js";
 
 export const name = "ded_notarize";
 export const description =
-  "All-in-one notarization: hashes the content, builds a FingerprintSubmission, signs it, computes the metadata hash, and submits it to the DED API. Returns the submission result. Requires both DED_SIGNING_PRIVATE_KEY and DED_API_KEY.";
+  "All-in-one notarization: hashes the content, builds a FingerprintSubmission, signs it, computes the metadata hash, and submits it to the DED API. Returns the submission result. Requires DED_SIGNING_PRIVATE_KEY and either DED_API_KEY or DED_WALLET_PRIVATE_KEY.";
 
 export const inputSchema = z.object({
   content: z.string().describe("The raw document text to notarize"),

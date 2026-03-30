@@ -5,7 +5,7 @@ import { fingerprintSubmissionSchema } from "../types/fingerprint-schema.js";
 
 export const name = "ded_validate_fingerprints";
 export const description =
-  "Dry-run validation of fingerprint submissions without actually submitting them. Requires an API key. Use this to check that fingerprints are correctly formatted before submission.";
+  "Dry-run validation of fingerprint submissions without actually submitting them. Requires an API key or x402 wallet. Use this to check that fingerprints are correctly formatted before submission.";
 
 export const inputSchema = z.object({
   fingerprints: z

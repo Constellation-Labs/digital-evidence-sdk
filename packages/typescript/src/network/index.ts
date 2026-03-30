@@ -63,3 +63,14 @@ export type {
   DocumentUploadResultItem,
   ApiErrorResponse,
 } from './types';
+
+// x402 payment types and helpers
+export { createEthersSigner, buildPaymentHeader, parsePaymentRequired } from './x402';
+export type {
+  X402Signer,
+  X402PaymentOffer,
+  X402PaymentRequired,
+  Eip712Domain,
+  TransferAuthorization,
+  EthersWalletLike,
+} from './x402';

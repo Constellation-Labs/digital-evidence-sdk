@@ -3,7 +3,7 @@ import type { DedApiClient } from "../api-client.js";
 
 export const name = "ded_search_fingerprints";
 export const description =
-  "Search fingerprints with filters. Requires an API key. Supports pagination via cursor. Returns fingerprint summaries matching the search criteria.";
+  "Search fingerprints with filters. Requires an API key or x402 wallet. Supports pagination via cursor. Returns fingerprint summaries matching the search criteria.";
 
 export const inputSchema = z.object({
   documentId: z.string().optional().describe("Filter by document ID"),
