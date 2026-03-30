@@ -42,11 +42,11 @@ export const inputSchema = z.object({
     .string()
     .regex(/^0x[0-9a-fA-F]{40}$/)
     .optional()
-    .describe("Ethereum wallet address (0x...) to enable x402 micropayment mode. The generated script reads the private key from WALLET_PRIVATE_KEY env var."),
+    .describe("Ethereum wallet address (0x...) to enable x402 micropayment mode. Must also provide walletKeyPath."),
   walletKeyPath: z
     .string()
     .optional()
-    .describe("Path to a file containing the Ethereum wallet private key for x402 payments (hex, 0x-prefixed or raw). Used instead of the WALLET_PRIVATE_KEY env var."),
+    .describe("Path to a file containing the Ethereum wallet private key for x402 payments (hex, 0x-prefixed or raw). Required when walletAddress is set."),
 });
 
 function jsEscape(s: string): string {
@@ -78,6 +78,21 @@ export function register(apiBaseUrl: string) {
     const apiUrl = `${apiBaseUrl}/v1/fingerprints/upload`;
 
     if (args.walletAddress) {
+      if (!args.walletKeyPath) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                { error: "walletKeyPath is required when using walletAddress for x402 mode" },
+                null,
+                2
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
       const script = buildX402Script(
         apiUrl,
         jsEscape(args.filePath),
@@ -85,12 +100,8 @@ export function register(apiBaseUrl: string) {
         jsEscape(args.privateKeyPath),
         args.documentId ? jsEscape(args.documentId) : undefined,
         tagsObj,
-        args.walletKeyPath ? jsEscape(args.walletKeyPath) : undefined
+        jsEscape(args.walletKeyPath)
       );
-      const walletKeyInstr = args.walletKeyPath
-        ? ""
-        : "3. Set wallet key: export WALLET_PRIVATE_KEY=0x...\n";
-      const runStep = args.walletKeyPath ? "3" : "4";
       return {
         content: [
           {
@@ -101,8 +112,7 @@ export function register(apiBaseUrl: string) {
                 instructions:
                   "1. Write the script to a file (e.g. upload-x402.js) using a file-write tool — do NOT use shell heredocs\n" +
                   "2. Install dependencies: npm install @constellation-network/digital-evidence-sdk ethers\n" +
-                  walletKeyInstr +
-                  `${runStep}. Run: node upload-x402.js\n` +
+                  "3. Run: node upload-x402.js\n" +
                   "Requires: Node.js 18+, ethers v6 (for EIP-3009 payment signing)\n" +
                   "The script uses x402 pay-per-request — no API key needed. " +
                   "It sends an initial request, receives pricing via HTTP 402, signs an EIP-3009 authorization, and retries with payment.",
@@ -280,18 +290,9 @@ function buildX402Script(
   keyPath: string,
   documentId: string | undefined,
   tagsObj: string,
-  walletKeyPath: string | undefined
+  walletKeyPath: string
 ): string {
   const docIdExpr = documentId ? `"${documentId}"` : "docHash";
-
-  const walletKeyLoading = walletKeyPath
-    ? `const WALLET_PRIVATE_KEY = fs.readFileSync("${walletKeyPath}", "utf8").trim();`
-    : `const WALLET_PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY;
-if (!WALLET_PRIVATE_KEY) {
-  console.error("Error: WALLET_PRIVATE_KEY environment variable is required");
-  console.error("  export WALLET_PRIVATE_KEY=0x...");
-  process.exit(1);
-}`;
 
   return `#!/usr/bin/env node
 // DED Document Upload Script (x402 micropayment mode)
@@ -314,12 +315,21 @@ const KEY_PATH = "${keyPath}";
 const API_URL = "${apiUrl}";
 const TAGS = ${tagsObj};
 
-${walletKeyLoading}
+const WALLET_PRIVATE_KEY = fs.readFileSync("${walletKeyPath}", "utf8").trim();
 const wallet = new ethers.Wallet(WALLET_PRIVATE_KEY);
 
-// Derive deterministic org/tenant UUIDs from wallet address
-const ORG_ID = sdk.orgIdFromWallet(wallet.address);
-const TENANT_ID = sdk.tenantIdFromWallet(wallet.address);
+// Derive deterministic org/tenant UUIDs from wallet address (UUID v5, RFC 4122)
+function uuidv5(namespace, name) {
+  const nsBytes = Buffer.from(namespace.replace(/-/g, ""), "hex");
+  const nameBytes = Buffer.from(name, "utf8");
+  const hash = crypto.createHash("sha1").update(Buffer.concat([nsBytes, nameBytes])).digest();
+  hash[6] = (hash[6] & 0x0f) | 0x50;
+  hash[8] = (hash[8] & 0x3f) | 0x80;
+  const hex = hash.slice(0, 16).toString("hex");
+  return hex.slice(0,8)+"-"+hex.slice(8,12)+"-"+hex.slice(12,16)+"-"+hex.slice(16,20)+"-"+hex.slice(20,32);
+}
+const ORG_ID = uuidv5("d2b4722a-d82d-424a-8b18-3330b4ade651", wallet.address.toLowerCase());
+const TENANT_ID = uuidv5("4bed9e61-6d07-4e26-9692-b81dd6994ff3", wallet.address.toLowerCase());
 
 // EIP-712 types for EIP-3009 TransferWithAuthorization
 const TRANSFER_WITH_AUTHORIZATION_TYPES = {
