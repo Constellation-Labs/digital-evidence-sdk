@@ -132,3 +132,23 @@ export interface DocumentDownloadResult {
   eventId: string;
   downloadUrl: string;
 }
+
+// ── x402 pay-per-request types ──────────────────────────────────────
+
+export interface X402PaymentRequired {
+  x402Version: number;
+  resource: { url: string; description: string };
+  accepts: Array<{
+    scheme: string;
+    network: string;
+    amount: string;
+    asset: string;
+    payTo: string;
+    maxTimeoutSeconds: number;
+    extra?: { name?: string; version?: string; facilitatorUrl?: string };
+  }>;
+}
+
+export type PaymentOr<T> =
+  | { kind: "result"; data: T }
+  | { kind: "payment_required"; payment: X402PaymentRequired };

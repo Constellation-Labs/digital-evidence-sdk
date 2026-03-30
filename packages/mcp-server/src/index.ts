@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { loadConfig } from "./config.js";
 import { DedApiClient } from "./api-client.js";
+import { SIGNING_SCRIPT } from "./signing-script.js";
 
 import * as getStats from "./tools/get-stats.js";
 import * as getLatest from "./tools/get-latest.js";
@@ -25,6 +26,10 @@ import * as waitBatchStatus from "./tools/wait-batch-status.js";
 import * as downloadDocument from "./tools/download-document.js";
 import * as uploadDocument from "./tools/upload-document.js";
 import * as notarizeDocument from "./tools/notarize-document.js";
+import * as prepareUnsignedFingerprint from "./tools/prepare-unsigned-fingerprint.js";
+import * as signLocal from "./tools/sign-local.js";
+import * as submitFingerprintScript from "./tools/submit-fingerprint-script.js";
+import * as uploadDocumentScript from "./tools/upload-document-script.js";
 
 const config = loadConfig();
 const client = new DedApiClient(config);
@@ -113,37 +118,67 @@ server.tool(
   downloadDocument.register(client)
 );
 
-// ── Authenticated tools (require API key) ────────────────────────────
+// ── Paid tools (require API key or x402 payment) ─────────────────────
 
-if (config.apiKey) {
-  server.tool(
-    searchFingerprints.name,
-    searchFingerprints.description,
-    searchFingerprints.inputSchema.shape,
-    searchFingerprints.register(client)
-  );
+server.tool(
+  searchFingerprints.name,
+  searchFingerprints.description,
+  searchFingerprints.inputSchema.shape,
+  searchFingerprints.register(client)
+);
 
-  server.tool(
-    submitFingerprints.name,
-    submitFingerprints.description,
-    submitFingerprints.inputSchema.shape,
-    submitFingerprints.register(client)
-  );
+server.tool(
+  submitFingerprints.name,
+  submitFingerprints.description,
+  submitFingerprints.inputSchema.shape,
+  submitFingerprints.register(client)
+);
 
-  server.tool(
-    validateFingerprints.name,
-    validateFingerprints.description,
-    validateFingerprints.inputSchema.shape,
-    validateFingerprints.register(client)
-  );
+server.tool(
+  validateFingerprints.name,
+  validateFingerprints.description,
+  validateFingerprints.inputSchema.shape,
+  validateFingerprints.register(client)
+);
 
-  server.tool(
-    uploadDocument.name,
-    uploadDocument.description,
-    uploadDocument.inputSchema.shape,
-    uploadDocument.register(client)
-  );
-}
+server.tool(
+  uploadDocument.name,
+  uploadDocument.description,
+  uploadDocument.inputSchema.shape,
+  uploadDocument.register(client)
+);
+
+// ── Unsigned preparation & local signing (no private key needed) ─────
+
+server.tool(
+  prepareUnsignedFingerprint.name,
+  prepareUnsignedFingerprint.description,
+  prepareUnsignedFingerprint.inputSchema.shape,
+  prepareUnsignedFingerprint.register()
+);
+
+server.tool(
+  signLocal.name,
+  signLocal.description,
+  signLocal.inputSchema.shape,
+  signLocal.register()
+);
+
+// ── Script generation tools (no private key needed on server) ────────
+
+server.tool(
+  submitFingerprintScript.name,
+  submitFingerprintScript.description,
+  submitFingerprintScript.inputSchema.shape,
+  submitFingerprintScript.register(config.apiBaseUrl)
+);
+
+server.tool(
+  uploadDocumentScript.name,
+  uploadDocumentScript.description,
+  uploadDocumentScript.inputSchema.shape,
+  uploadDocumentScript.register(config.apiBaseUrl)
+);
 
 // ── Local-only signing tools (require private key) ───────────────────
 
@@ -162,21 +197,19 @@ if (config.signingPrivateKey) {
     prepareFingerprint.register(config.signingPrivateKey)
   );
 
-  if (config.apiKey) {
-    server.tool(
-      notarize.name,
-      notarize.description,
-      notarize.inputSchema.shape,
-      notarize.register(config.signingPrivateKey, client)
-    );
+  server.tool(
+    notarize.name,
+    notarize.description,
+    notarize.inputSchema.shape,
+    notarize.register(config.signingPrivateKey, client)
+  );
 
-    server.tool(
-      notarizeDocument.name,
-      notarizeDocument.description,
-      notarizeDocument.inputSchema.shape,
-      notarizeDocument.register(config.signingPrivateKey, client)
-    );
-  }
+  server.tool(
+    notarizeDocument.name,
+    notarizeDocument.description,
+    notarizeDocument.inputSchema.shape,
+    notarizeDocument.register(config.signingPrivateKey, client)
+  );
 }
 
 // ── MCP Resources (static context) ──────────────────────────────────
@@ -321,113 +354,12 @@ server.resource(
   })
 );
 
-const SIGNING_SCRIPT = `#!/usr/bin/env node
-// ded-sign.js — Self-contained DED signing script (Node.js 18+, zero npm dependencies)
-//
-// Usage:
-//   node ded-sign.js sign   <privateKeyHex> '<fingerprintValueJson>'
-//   node ded-sign.js keygen
-//
-// The sign command outputs a SignatureProof JSON object:
-//   { "id": "<publicKeyHex>", "signature": "<signatureHex>", "algorithm": "SECP256K1_RFC8785_V1" }
-//
-// The keygen command outputs a new keypair:
-//   { "privateKey": "<hex>", "publicKey": "<hex>" }
-
-"use strict";
-
-const crypto = require("crypto");
-
-// ── RFC 8785 JSON Canonicalization ──────────────────────────────────
-// Implements https://www.rfc-editor.org/rfc/rfc8785
-
-function canonicalize(value) {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return "[" + value.map((v) => canonicalize(v)).join(",") + "]";
-  }
-  const keys = Object.keys(value).sort();
-  const entries = keys
-    .filter((k) => value[k] !== undefined)
-    .map((k) => JSON.stringify(k) + ":" + canonicalize(value[k]));
-  return "{" + entries.join(",") + "}";
-}
-
-// ── secp256k1 helpers ───────────────────────────────────────────────
-
-function buildSec1Der(privateKeyBuf) {
-  const ver = Buffer.from([0x02, 0x01, 0x01]);
-  const key = Buffer.concat([Buffer.from([0x04, 0x20]), privateKeyBuf]);
-  const oid = Buffer.from([0xa0, 0x07, 0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x0a]);
-  const inner = Buffer.concat([ver, key, oid]);
-  return Buffer.concat([Buffer.from([0x30, inner.length]), inner]);
-}
-
-function getPublicKey(privateKeyHex) {
-  const ecdh = crypto.createECDH("secp256k1");
-  ecdh.setPrivateKey(Buffer.from(privateKeyHex, "hex"));
-  return ecdh.getPublicKey().subarray(1).toString("hex");
-}
-
-function makeKeyObject(privateKeyHex) {
-  const der = buildSec1Der(Buffer.from(privateKeyHex, "hex"));
-  return crypto.createPrivateKey({ key: der, format: "der", type: "sec1" });
-}
-
-// ── SECP256K1_RFC8785_V1 signing protocol ───────────────────────────
-
-function sign(fingerprintValue, privateKeyHex) {
-  const canonical = canonicalize(fingerprintValue);
-  const sha256Hex = crypto.createHash("sha256").update(canonical, "utf8").digest("hex");
-  const digest = crypto.createHash("sha512").update(sha256Hex, "utf8").digest().subarray(0, 32);
-  const sig = crypto.sign(null, digest, makeKeyObject(privateKeyHex));
-  return {
-    id: getPublicKey(privateKeyHex),
-    signature: sig.toString("hex"),
-    algorithm: "SECP256K1_RFC8785_V1",
-  };
-}
-
-// ── Key generation ──────────────────────────────────────────────────
-
-function keygen() {
-  const ecdh = crypto.createECDH("secp256k1");
-  ecdh.generateKeys();
-  return {
-    privateKey: ecdh.getPrivateKey().toString("hex"),
-    publicKey: ecdh.getPublicKey().subarray(1).toString("hex"),
-  };
-}
-
-// ── CLI ─────────────────────────────────────────────────────────────
-
-const [, , command, ...args] = process.argv;
-
-if (command === "sign") {
-  const [privateKey, contentJson] = args;
-  if (!privateKey || !contentJson) {
-    console.error("Usage: node ded-sign.js sign <privateKeyHex> '<fingerprintValueJson>'");
-    process.exit(1);
-  }
-  const proof = sign(JSON.parse(contentJson), privateKey);
-  console.log(JSON.stringify(proof, null, 2));
-} else if (command === "keygen") {
-  console.log(JSON.stringify(keygen(), null, 2));
-} else {
-  console.error("Usage:");
-  console.error("  node ded-sign.js sign   <privateKeyHex> '<fingerprintValueJson>'");
-  console.error("  node ded-sign.js keygen");
-  process.exit(1);
-}`;
-
 server.resource(
   "signing-script",
   "ded://tools/signing-script",
   {
     description:
-      "Self-contained Node.js signing script (zero npm dependencies, requires Node.js 18+). " +
+      "Node.js signing script (requires Node.js 18+ and @constellation-network/digital-evidence-sdk). " +
       "Save locally and run: node ded-sign.js sign <privateKeyHex> '<fingerprintValueJson>'",
     mimeType: "application/javascript",
   },
@@ -553,6 +485,295 @@ server.resource(
   })
 );
 
+server.resource(
+  "x402-payment-docs",
+  "ded://docs/x402-payment",
+  {
+    description:
+      "Documentation for x402 pay-per-request protocol — an alternative to API key subscriptions for fingerprint submission, document upload, and search",
+    mimeType: "text/plain",
+  },
+  async (uri) => ({
+    contents: [
+      {
+        uri: uri.href,
+        mimeType: "text/plain",
+        text: [
+          "DED x402 Pay-Per-Request Protocol",
+          "==================================",
+          "",
+          "x402 is a pay-per-request protocol that allows callers to submit fingerprints, upload",
+          "documents, and search without an API key or subscription. Instead, the caller pays per",
+          "request using USDC on Base Sepolia (testnet) or Base (mainnet) via a Stripe facilitator.",
+          "",
+          "When to use x402:",
+          "  - No DED account or API key needed",
+          "  - Pay only for what you use — no subscription required",
+          "  - Ideal for one-off submissions, integrations, or programmatic agents",
+          "",
+          "─── Eligible Endpoints ────────────────────────────────────────────",
+          "",
+          "  POST /fingerprints           — Submit signed fingerprints",
+          "  POST /fingerprints/validate  — Dry-run validation (no persistence)",
+          "  POST /fingerprints/upload    — Upload documents with fingerprints",
+          "  GET  /query/fingerprints     — Search fingerprints with filters",
+          "",
+          "Read-only endpoints (get fingerprint, get batch, get proof, track, verify, stats,",
+          "latest, download) remain free and require no authentication.",
+          "",
+          "─── Three-Step Payment Flow ───────────────────────────────────────",
+          "",
+          "Step 1 — Price Discovery:",
+          "  Send the request WITHOUT an X-API-Key header and WITHOUT an X-PAYMENT",
+          "  header. The server inspects the request body to compute the price and",
+          "  returns HTTP 402 with:",
+          "",
+          "  Response body (JSON):",
+          '    {',
+          '      "x402Version": 2,',
+          '      "resource": { "url": "/fingerprints", "description": "DED API: /fingerprints" },',
+          '      "accepts": [{',
+          '        "scheme": "exact",',
+          '        "network": "eip155:84532",',
+          '        "amount": "40000",',
+          '        "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",',
+          '        "payTo": "<Stripe deposit address>",',
+          '        "maxTimeoutSeconds": 60,',
+          '        "extra": { "name": "USD Coin", "version": "2" }',
+          '      }]',
+          '    }',
+          "",
+          '  The response is also available via the X-PAYMENT-REQUIRED header (base64).',
+          '  The "amount" is in atomic USDC units (6 decimals). Example: "40000" = $0.04 USD.',
+          '  The "extra" field contains EIP-712 domain info (name, version) for signing.',
+          "",
+          "Step 2 — Sign EIP-3009 TransferWithAuthorization:",
+          "  Using ethers.js (v6) or equivalent, sign an EIP-712 typed data message",
+          "  authorizing a USDC transfer from your wallet to the payTo address:",
+          "",
+          '    const chainId = parseInt(offer.network.split(":")[1], 10);',
+          "    const domain = {",
+          '      name: offer.extra.name || "USD Coin",',
+          '      version: offer.extra.version || "2",',
+          "      chainId: chainId,",
+          "      verifyingContract: offer.asset,",
+          "    };",
+          "    const types = {",
+          "      TransferWithAuthorization: [",
+          '        { name: "from", type: "address" },',
+          '        { name: "to", type: "address" },',
+          '        { name: "value", type: "uint256" },',
+          '        { name: "validAfter", type: "uint256" },',
+          '        { name: "validBefore", type: "uint256" },',
+          '        { name: "nonce", type: "bytes32" },',
+          "      ],",
+          "    };",
+          "    const authorization = {",
+          '      from: wallet.address, to: offer.payTo, value: offer.amount,',
+          '      validAfter: "0", validBefore: String(now + 300),',
+          "      nonce: ethers.hexlify(ethers.randomBytes(32)),",
+          "    };",
+          "    const signature = await wallet.signTypedData(domain, types, authorization);",
+          "",
+          "Step 3 — Retry with Payment:",
+          "  Build a PaymentPayload and retry the SAME request with the header:",
+          "",
+          "    X-PAYMENT: <base64-encoded PaymentPayload JSON>",
+          "",
+          "  PaymentPayload structure:",
+          '    {',
+          '      "x402Version": 2,',
+          '      "accepted": {',
+          '        "scheme": "exact",',
+          '        "network": "eip155:84532",',
+          '        "amount": "40000",',
+          '        "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",',
+          '        "payTo": "<deposit address>",',
+          '        "maxTimeoutSeconds": 60,',
+          '        "extra": { ... }',
+          '      },',
+          '      "payload": {',
+          '        "signature": "<EIP-712 signature hex>",',
+          '        "authorization": {',
+          '          "from": "<wallet address>",',
+          '          "to": "<payTo address>",',
+          '          "value": "<amount>",',
+          '          "validAfter": "0",',
+          '          "validBefore": "<unix timestamp>",',
+          '          "nonce": "<random bytes32 hex>"',
+          '        }',
+          '      }',
+          '    }',
+          "",
+          '  The "accepted" field echoes the offer from accepts[0] in the 402 response.',
+          "",
+          "  The server:",
+          "    1. Re-computes the price from the actual body (never trusts the client amount)",
+          "    2. Verifies the EIP-3009 signature with the Stripe facilitator (POST /verify)",
+          "    3. Resolves the payer wallet address (0x...) to an organization + tenant",
+          "    4. Processes the request (submit, upload, search, etc.)",
+          "    5. Returns the normal success response",
+          "    6. Settles the payment asynchronously (POST /settle)",
+          "",
+          "─── Pricing ───────────────────────────────────────────────────────",
+          "",
+          "  Credit unit:     1 credit = 10,000 atomic USDC ($0.01 USD)",
+          "  Fingerprint:     2 credits per fingerprint ($0.02 USD each)",
+          "  Document upload: fingerprint credits + ceil(content-length / 100KB) credits",
+          "  Search query:    1 credit ($0.01 USD)",
+          "",
+          "  Examples:",
+          "    5 fingerprints:  5 × 2 × 10,000 = 100,000 atomic USDC ($0.10)",
+          "    1 FP + 250KB doc: (2 + 3) × 10,000 = 50,000 atomic USDC ($0.05)",
+          "    1 search query:  1 × 10,000 = 10,000 atomic USDC ($0.01)",
+          "",
+          "─── Wallet-to-Organization Mapping ────────────────────────────────",
+          "",
+          "On first payment, the x402 middleware automatically creates:",
+          "  - A \"pay_per_use\" organization linked to the payer's wallet address",
+          "  - A default tenant under that organization",
+          "",
+          "Subsequent requests from the same wallet reuse the existing org/tenant.",
+          "All fingerprints submitted via x402 are recorded under this org/tenant.",
+          "",
+          "─── Network & Asset Details ───────────────────────────────────────",
+          "",
+          "  Network: Base Sepolia (eip155:84532) for testnet, Base (eip155:8453) for mainnet",
+          "  Asset:   USDC contract address (network-specific)",
+          "",
+          "─── x402 vs API Key Authentication ────────────────────────────────",
+          "",
+          "  | Feature             | API Key + Subscription   | x402 Pay-Per-Request      |",
+          "  |---------------------|--------------------------|---------------------------|",
+          "  | Account required    | Yes (Cognito + Stripe)   | No                        |",
+          "  | Billing model       | Monthly subscription     | Per-request USDC payment  |",
+          "  | Credit tracking     | Redis counters → DB      | Per-transaction audit log |",
+          "  | Org/tenant          | Pre-provisioned          | Auto-created from wallet  |",
+          "  | Upload support      | Paid tiers only          | Always available          |",
+          "  | Header              | X-API-Key                | X-PAYMENT                 |",
+          "",
+          "Both paths produce identical fingerprint records on-chain.",
+          "",
+          "─── Client Implementation Notes ───────────────────────────────────",
+          "",
+          "Prerequisites:",
+          "  - A Base Sepolia wallet funded with USDC (0x036CbD53842c5426634e7929541eC2318f3dCF7e)",
+          "  - ethers.js v6 (or equivalent EIP-712 signing library)",
+          "  - The wallet's private key (for signing the EIP-3009 authorization)",
+          "",
+          "For programmatic clients implementing the x402 flow:",
+          "  1. POST the request without auth headers → receive HTTP 402 with pricing",
+          "  2. Parse the 402 response body to get the offer (accepts[0])",
+          "  3. Sign an EIP-3009 TransferWithAuthorization using EIP-712 typed data",
+          "     - Domain: { name, version } from offer.extra, chainId from offer.network, verifyingContract = offer.asset",
+          "     - Authorization: from=wallet, to=offer.payTo, value=offer.amount, nonce=random bytes32",
+          "  4. Build PaymentPayload with \"accepted\" (echo the offer) and \"payload\" (signature + authorization)",
+          "  5. Base64-encode the PaymentPayload and retry with X-PAYMENT header",
+          "  6. For fingerprint submissions, also include X-Fingerprint-Count header",
+          "",
+          "─── Using x402 with MCP Tools ─────────────────────────────────────",
+          "",
+          "When no DED_API_KEY is configured, paid MCP tools (ded_submit_fingerprints,",
+          "ded_search_fingerprints, ded_validate_fingerprints, ded_upload_document,",
+          "ded_notarize, ded_notarize_document) support x402 as a two-call flow:",
+          "",
+          "  1. Call the tool without paymentSignature — the tool makes the request,",
+          "     receives HTTP 402, and returns the payment requirement details",
+          "  2. Sign an EIP-3009 TransferWithAuthorization using the offer details",
+          "  3. Call the same tool again with the paymentSignature parameter set to",
+          "     the base64-encoded PaymentPayload — the tool completes the request",
+          "",
+          "The x402 protocol is defined at https://www.x402.org/",
+          "See e2e-test/x402-submit-fingerprint.js for a complete reference implementation.",
+          "",
+          "Full documentation: https://constellation-main.gitbook.io/digital-evidence/",
+        ].join("\n"),
+      },
+    ],
+  })
+);
+
+server.resource(
+  "authentication-docs",
+  "ded://docs/authentication",
+  {
+    description:
+      "Guide to DED authentication options: API key subscriptions vs x402 pay-per-request micropayments",
+    mimeType: "text/plain",
+  },
+  async (uri) => ({
+    contents: [
+      {
+        uri: uri.href,
+        mimeType: "text/plain",
+        text: [
+          "DED Authentication Guide",
+          "========================",
+          "",
+          "Two authentication methods are available for paid operations (submit, search,",
+          "validate, upload). Read-only operations are always free and unauthenticated.",
+          "",
+          "─── Option 1: API Key + Subscription ──────────────────────────────",
+          "",
+          "Best for ongoing use. Set the DED_API_KEY environment variable.",
+          "",
+          "  - Sign up and subscribe at the DED portal",
+          "  - The API key is passed as X-Api-Key header on every request",
+          "  - orgId and tenantId are provided as tool parameters",
+          "  - Credits are deducted per operation from your subscription",
+          "",
+          "MCP tools using API key: ded_submit_fingerprints, ded_search_fingerprints,",
+          "ded_validate_fingerprints, ded_upload_document, ded_notarize, ded_notarize_document",
+          "",
+          "─── Option 2: x402 Pay-Per-Request ────────────────────────────────",
+          "",
+          "Best for one-off submissions, integrations, or programmatic agents.",
+          "No account or subscription needed — pay per request with USDC on Base.",
+          "",
+          "How to get started:",
+          "  - You need a Base Sepolia wallet funded with USDC and its private key",
+          "  - You need ethers.js v6 (or equivalent) for EIP-3009 payment signing",
+          "",
+          "Two ways to use x402 with MCP tools:",
+          "",
+          "  A. Inline x402 (two-call flow):",
+          "     1. Call a paid tool without paymentSignature — get payment details back",
+          "     2. Sign an EIP-3009 TransferWithAuthorization using the offer details",
+          "     3. Re-call the tool with paymentSignature parameter",
+          "",
+          "  B. Script generation:",
+          "     Call ded_submit_fingerprint_script or ded_upload_document_script",
+          "     — get a self-contained Node.js script that handles the x402 payment",
+          "     flow automatically (requires ethers.js and WALLET_PRIVATE_KEY env var)",
+          "",
+          "See ded://docs/x402-payment for full protocol details, PaymentPayload structure, and pricing.",
+          "",
+          "─── Authenticated tools / endpoints ───────────────────────────────",
+          "",
+          "Require API key OR x402 payment:",
+          "  POST /fingerprints           — ded_submit_fingerprints",
+          "  POST /fingerprints/validate  — ded_validate_fingerprints",
+          "  POST /fingerprints/upload    — ded_upload_document",
+          "  GET  /query/fingerprints     — ded_search_fingerprints",
+          "",
+          "Script generation (require API key or walletAddress parameter):",
+          "  ded_submit_fingerprint_script, ded_upload_document_script",
+          "",
+          "─── Free tools (no auth needed) ────────────────────────────────────",
+          "",
+          "  ded_get_stats, ded_get_latest_fingerprints, ded_get_fingerprint,",
+          "  ded_get_fingerprint_proof, ded_get_batch, ded_get_batch_fingerprints,",
+          "  ded_track_fingerprint, ded_wait_batch_status, ded_verify_proof,",
+          "  ded_download_document, ded_hash_document, ded_prepare_unsigned_fingerprint,",
+          "  ded_sign_local",
+          "",
+          "Full documentation: https://constellation-main.gitbook.io/digital-evidence/",
+        ].join("\n"),
+      },
+    ],
+  })
+);
+
 // ── MCP Prompts (guided workflows) ──────────────────────────────────
 
 if (config.signingPrivateKey) {
@@ -574,6 +795,12 @@ if (config.signingPrivateKey) {
               `If ded_notarize is not available (no API key), use the two-step flow instead:`,
               `1. Call ded_prepare_fingerprint with the content, orgId, tenantId, and documentRef`,
               `2. Call ded_submit_fingerprints with the prepared fingerprint EXACTLY as returned — do NOT modify any fields`,
+              ``,
+              `Alternative: x402 pay-per-request (no API key needed)`,
+              `If the user does not have an API key or subscription, they can submit`,
+              `fingerprints directly to the REST API using the x402 pay-per-request protocol,`,
+              `which pays per request with USDC instead of using a subscription.`,
+              `See ded://docs/x402-payment for the full protocol details and pricing.`,
               ``,
               `For full documentation on signing and submitting, see: https://constellation-main.gitbook.io/digital-evidence/sign-and-submit-data`,
               ``,
@@ -636,7 +863,7 @@ server.prompt(
   })
 );
 
-if (config.signingPrivateKey && config.apiKey) {
+if (config.signingPrivateKey) {
   server.prompt(
     "upload-document",
     "Guided workflow to upload a file with a fingerprint submission",
@@ -659,6 +886,12 @@ if (config.signingPrivateKey && config.apiKey) {
               `   - The prepared fingerprint in the fingerprints array (pass it exactly as returned)`,
               `   - A document entry with documentRef set to the fingerprint's documentRef value from step 1, filePath "${filePath}", and contentType "${contentType}"`,
               `3. Call ded_track_fingerprint with the fingerprint hash to confirm submission`,
+              ``,
+              `Alternative: x402 pay-per-request (no API key needed)`,
+              `If the user does not have an API key or subscription, they can upload`,
+              `documents directly to the REST API using the x402 pay-per-request protocol,`,
+              `which pays per request with USDC instead of using a subscription.`,
+              `See ded://docs/x402-payment for the full protocol details and pricing.`,
               ``,
               `For allowed MIME types and size limits, see: ded://docs/document-upload`,
               `For full documentation: https://constellation-main.gitbook.io/digital-evidence/sign-and-submit-data`,

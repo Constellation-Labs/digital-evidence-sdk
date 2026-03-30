@@ -10,8 +10,26 @@ import type {
   FingerprintSubmissionResult,
   DocumentUploadResponse,
   DocumentDownloadResult,
+  X402PaymentRequired,
+  PaymentOr,
 } from "./types/api.js";
 import type { FingerprintSubmission, DocumentInput } from "./types/fingerprint.js";
+
+async function parsePaymentRequired(response: Response): Promise<X402PaymentRequired | null> {
+  // Primary: parse 402 response body as JSON
+  try {
+    const body = await response.clone().json();
+    if (body && Array.isArray(body.accepts)) {
+      return body as X402PaymentRequired;
+    }
+  } catch {
+    // fall through to header
+  }
+  // Fallback: X-PAYMENT-REQUIRED header (base64 JSON)
+  const raw = response.headers.get("X-PAYMENT-REQUIRED");
+  if (!raw) return null;
+  return JSON.parse(atob(raw)) as X402PaymentRequired;
+}
 
 export class DedApiClient {
   private baseUrl: string;
@@ -46,6 +64,42 @@ export class DedApiClient {
     }
 
     return response.json() as Promise<T>;
+  }
+
+  private async requestWithPayment<T>(
+    path: string,
+    options: RequestInit = {},
+    paymentSignature?: string
+  ): Promise<PaymentOr<T>> {
+    const url = `${this.baseUrl}/v1${path}`;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(options.headers as Record<string, string>),
+    };
+
+    if (this.apiKey) {
+      headers["X-Api-Key"] = this.apiKey;
+    } else if (paymentSignature) {
+      headers["X-PAYMENT"] = paymentSignature;
+    }
+
+    const response = await fetch(url, { ...options, headers });
+
+    if (response.status === 402 && !this.apiKey) {
+      const payment = await parsePaymentRequired(response);
+      if (payment) {
+        return { kind: "payment_required", payment };
+      }
+    }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(
+        `DED API error: ${response.status} ${response.statusText} - ${body}`
+      );
+    }
+
+    return { kind: "result", data: (await response.json()) as T };
   }
 
   async getStats(): Promise<FingerprintGlobalStats> {
@@ -118,20 +172,20 @@ export class DedApiClient {
     }
   }
 
-  async searchFingerprints(params: {
-    documentId?: string;
-    eventId?: string;
-    documentRef?: string;
-    datetimeStart?: string;
-    datetimeEnd?: string;
-    tags?: Record<string, string>;
-    limit?: number;
-    cursor?: string;
-    forward?: boolean;
-  }): Promise<PaginatedDataResponse<FingerprintSummary[]>> {
-    if (!this.apiKey) {
-      throw new Error("API key required for search");
-    }
+  async searchFingerprints(
+    params: {
+      documentId?: string;
+      eventId?: string;
+      documentRef?: string;
+      datetimeStart?: string;
+      datetimeEnd?: string;
+      tags?: Record<string, string>;
+      limit?: number;
+      cursor?: string;
+      forward?: boolean;
+    },
+    paymentSignature?: string
+  ): Promise<PaymentOr<PaginatedDataResponse<FingerprintSummary[]>>> {
     const qs = new URLSearchParams();
     if (params.documentId) qs.set("document_id", params.documentId);
     if (params.eventId) qs.set("event_id", params.eventId);
@@ -144,37 +198,35 @@ export class DedApiClient {
     if (params.forward !== undefined)
       qs.set("forward", String(params.forward));
 
-    return this.request<PaginatedDataResponse<FingerprintSummary[]>>(
-      `/fingerprints?${qs}`
+    return this.requestWithPayment<PaginatedDataResponse<FingerprintSummary[]>>(
+      `/fingerprints?${qs}`,
+      {},
+      paymentSignature
     );
   }
 
   async submitFingerprints(
-    submissions: FingerprintSubmission[]
-  ): Promise<FingerprintSubmissionResult[]> {
-    if (!this.apiKey) {
-      throw new Error("API key required for submission");
-    }
-    const resp = await this.request<FingerprintSubmissionResult[]>(
+    submissions: FingerprintSubmission[],
+    paymentSignature?: string
+  ): Promise<PaymentOr<FingerprintSubmissionResult[]>> {
+    return this.requestWithPayment<FingerprintSubmissionResult[]>(
       "/fingerprints",
       {
         method: "POST",
         body: JSON.stringify(submissions),
-      }
+      },
+      paymentSignature
     );
-    return resp;
   }
 
   async validateFingerprints(
-    submissions: FingerprintSubmission[]
-  ): Promise<unknown> {
-    if (!this.apiKey) {
-      throw new Error("API key required for validation");
-    }
-    return this.request("/fingerprints/validate", {
+    submissions: FingerprintSubmission[],
+    paymentSignature?: string
+  ): Promise<PaymentOr<unknown>> {
+    return this.requestWithPayment("/fingerprints/validate", {
       method: "POST",
       body: JSON.stringify(submissions),
-    });
+    }, paymentSignature);
   }
 
   async downloadDocument(
@@ -208,12 +260,9 @@ export class DedApiClient {
 
   async uploadDocuments(
     fingerprints: FingerprintSubmission[],
-    documents: DocumentInput[]
-  ): Promise<DocumentUploadResponse> {
-    if (!this.apiKey) {
-      throw new Error("API key required for document upload");
-    }
-
+    documents: DocumentInput[],
+    paymentSignature?: string
+  ): Promise<PaymentOr<DocumentUploadResponse>> {
     // Build raw multipart body with per-part Content-Length headers
     // (required by the DED server for pre-validation before streaming)
     const boundary = `----DedMcp${crypto.randomUUID().replace(/-/g, "")}`;
@@ -264,15 +313,28 @@ export class DedApiClient {
     }
 
     const url = `${this.baseUrl}/v1/fingerprints/upload`;
+    const headers: Record<string, string> = {
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
+    };
+
+    if (this.apiKey) {
+      headers["X-Api-Key"] = this.apiKey;
+    } else if (paymentSignature) {
+      headers["X-PAYMENT"] = paymentSignature;
+    }
 
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "X-Api-Key": this.apiKey,
-        "Content-Type": `multipart/form-data; boundary=${boundary}`,
-      },
+      headers,
       body,
     });
+
+    if (response.status === 402 && !this.apiKey) {
+      const payment = await parsePaymentRequired(response);
+      if (payment) {
+        return { kind: "payment_required", payment };
+      }
+    }
 
     if (!response.ok) {
       const respBody = await response.text().catch(() => "");
@@ -281,6 +343,6 @@ export class DedApiClient {
       );
     }
 
-    return response.json() as Promise<DocumentUploadResponse>;
+    return { kind: "result", data: (await response.json()) as DocumentUploadResponse };
   }
 }

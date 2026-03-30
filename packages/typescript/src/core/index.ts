@@ -44,6 +44,9 @@ export {
   safeValidateSubmission,
 } from './validation';
 
+// Wallet UUID derivation (x402)
+export { uuidV5, orgIdFromWallet, tenantIdFromWallet } from './wallet-uuid';
+
 // Error hierarchy
 export { DedSdkError, ValidationError, SigningError } from './errors';
 
