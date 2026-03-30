@@ -15,8 +15,18 @@ import type {
 } from "./types/api.js";
 import type { FingerprintSubmission, DocumentInput } from "./types/fingerprint.js";
 
-function parsePaymentRequired(response: Response): X402PaymentRequired | null {
-  const raw = response.headers.get("PAYMENT-REQUIRED");
+async function parsePaymentRequired(response: Response): Promise<X402PaymentRequired | null> {
+  // Primary: parse 402 response body as JSON
+  try {
+    const body = await response.clone().json();
+    if (body && Array.isArray(body.accepts)) {
+      return body as X402PaymentRequired;
+    }
+  } catch {
+    // fall through to header
+  }
+  // Fallback: X-PAYMENT-REQUIRED header (base64 JSON)
+  const raw = response.headers.get("X-PAYMENT-REQUIRED");
   if (!raw) return null;
   return JSON.parse(atob(raw)) as X402PaymentRequired;
 }
@@ -70,13 +80,13 @@ export class DedApiClient {
     if (this.apiKey) {
       headers["X-Api-Key"] = this.apiKey;
     } else if (paymentSignature) {
-      headers["PAYMENT-SIGNATURE"] = paymentSignature;
+      headers["X-PAYMENT"] = paymentSignature;
     }
 
     const response = await fetch(url, { ...options, headers });
 
     if (response.status === 402 && !this.apiKey) {
-      const payment = parsePaymentRequired(response);
+      const payment = await parsePaymentRequired(response);
       if (payment) {
         return { kind: "payment_required", payment };
       }
@@ -310,7 +320,7 @@ export class DedApiClient {
     if (this.apiKey) {
       headers["X-Api-Key"] = this.apiKey;
     } else if (paymentSignature) {
-      headers["PAYMENT-SIGNATURE"] = paymentSignature;
+      headers["X-PAYMENT"] = paymentSignature;
     }
 
     const response = await fetch(url, {
@@ -320,7 +330,7 @@ export class DedApiClient {
     });
 
     if (response.status === 402 && !this.apiKey) {
-      const payment = parsePaymentRequired(response);
+      const payment = await parsePaymentRequired(response);
       if (payment) {
         return { kind: "payment_required", payment };
       }

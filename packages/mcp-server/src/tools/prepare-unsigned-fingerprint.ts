@@ -1,19 +1,25 @@
 import { createHash } from "crypto";
 import { z } from "zod";
-import { hashDocument, canonicalize } from "@constellation-network/digital-evidence-sdk";
+import { hashDocument, canonicalize, orgIdFromWallet, tenantIdFromWallet } from "@constellation-network/digital-evidence-sdk";
 
 export const name = "ded_prepare_unsigned_fingerprint";
 export const description =
   "Build a complete unsigned FingerprintValue JSON and metadata hash. Returns everything needed to sign locally " +
   "without requiring a private key on the server. Does not call the API or consume credits. " +
+  "Provide orgId + tenantId for API key mode, or walletAddress for x402 mode (org/tenant derived from wallet). " +
   "Alternative: if you have DED_SIGNING_PRIVATE_KEY configured, use ded_prepare_fingerprint instead to sign in one step.";
 
 export const inputSchema = z.object({
   content: z
     .string()
     .describe("The document content to notarize (will be SHA-256 hashed)"),
-  orgId: z.string().uuid().describe("Organization UUID"),
-  tenantId: z.string().uuid().describe("Tenant UUID"),
+  orgId: z.string().uuid().optional().describe("Organization UUID (required for API key mode, derived from walletAddress for x402)"),
+  tenantId: z.string().uuid().optional().describe("Tenant UUID (required for API key mode, derived from walletAddress for x402)"),
+  walletAddress: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .optional()
+    .describe("Ethereum wallet address (0x...) for x402 mode — orgId and tenantId are derived deterministically"),
   documentId: z
     .string()
     .optional()
@@ -24,8 +30,22 @@ export const inputSchema = z.object({
     .describe("Optional key-value metadata tags (max 6 pairs)"),
 });
 
+function resolveOrgTenant(args: { orgId?: string; tenantId?: string; walletAddress?: string }): { orgId: string; tenantId: string } {
+  if (args.walletAddress) {
+    return {
+      orgId: args.orgId ?? orgIdFromWallet(args.walletAddress),
+      tenantId: args.tenantId ?? tenantIdFromWallet(args.walletAddress),
+    };
+  }
+  if (args.orgId && args.tenantId) {
+    return { orgId: args.orgId, tenantId: args.tenantId };
+  }
+  throw new Error("Provide either orgId + tenantId (API key mode) or walletAddress (x402 mode)");
+}
+
 export function register() {
   return async (args: z.infer<typeof inputSchema>) => {
+    const { orgId, tenantId } = resolveOrgTenant(args);
     const contentHash = hashDocument(args.content);
     const documentId = args.documentId ?? contentHash;
     const eventId = crypto.randomUUID();
@@ -35,8 +55,8 @@ export function register() {
       documentId,
       documentRef: contentHash,
       eventId,
-      orgId: args.orgId,
-      tenantId: args.tenantId,
+      orgId,
+      tenantId,
       timestamp,
       version: 1,
     };

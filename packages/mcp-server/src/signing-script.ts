@@ -1,9 +1,10 @@
-/** Self-contained Node.js signing script (ded-sign.js) embedded as a string constant. */
+/** Self-contained Node.js signing script (ded-sign.js) embedded as a string constant.
+ *  Requires: Node.js 18+, @constellation-network/digital-evidence-sdk */
 export const SIGNING_SCRIPT = `#!/usr/bin/env node
-// ded-sign.js — Self-contained DED signing script (Node.js 18+, zero npm dependencies)
+// ded-sign.js — DED signing script
 //
 // Usage:
-//   node ded-sign.js sign   <privateKeyHex> '<fingerprintValueJson>'
+//   node ded-sign.js sign   <privateKeyHex|keyPath> '<fingerprintValueJson>'
 //   node ded-sign.js keygen
 //
 // The sign command outputs a SignatureProof JSON object:
@@ -11,49 +12,14 @@ export const SIGNING_SCRIPT = `#!/usr/bin/env node
 //
 // The keygen command outputs a new keypair:
 //   { "privateKey": "<hex>", "publicKey": "<hex>" }
+//
+// Requires: npm install @constellation-network/digital-evidence-sdk
 
 "use strict";
 
 const crypto = require("crypto");
 const fs = require("fs");
-
-// ── RFC 8785 JSON Canonicalization ──────────────────────────────────
-// Implements https://www.rfc-editor.org/rfc/rfc8785
-
-function canonicalize(value) {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return "[" + value.map((v) => canonicalize(v)).join(",") + "]";
-  }
-  const keys = Object.keys(value).sort();
-  const entries = keys
-    .filter((k) => value[k] !== undefined)
-    .map((k) => JSON.stringify(k) + ":" + canonicalize(value[k]));
-  return "{" + entries.join(",") + "}";
-}
-
-// ── secp256k1 helpers ───────────────────────────────────────────────
-
-function buildSec1Der(privateKeyBuf) {
-  const ver = Buffer.from([0x02, 0x01, 0x01]);
-  const key = Buffer.concat([Buffer.from([0x04, 0x20]), privateKeyBuf]);
-  const oid = Buffer.from([0xa0, 0x07, 0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x0a]);
-  const inner = Buffer.concat([ver, key, oid]);
-  return Buffer.concat([Buffer.from([0x30, inner.length]), inner]);
-}
-
-function getPublicKey(privateKeyHex) {
-  const ecdh = crypto.createECDH("secp256k1");
-  ecdh.setPrivateKey(Buffer.from(privateKeyHex, "hex"));
-  return ecdh.getPublicKey().subarray(1).toString("hex");
-}
-
-function makeKeyObject(privateKeyHex) {
-  const der = buildSec1Der(Buffer.from(privateKeyHex, "hex"));
-  return crypto.createPrivateKey({ key: der, format: "der", type: "sec1" });
-}
+const sdk = require("@constellation-network/digital-evidence-sdk");
 
 // ── Private key loading ─────────────────────────────────────────────
 
@@ -66,29 +32,20 @@ function loadPrivateKey(keyPathOrHex) {
   return Buffer.from(jwk.d, "base64url").toString("hex");
 }
 
-// ── SECP256K1_RFC8785_V1 signing protocol ───────────────────────────
+// ── Wrappers ────────────────────────────────────────────────────────
 
-function sign(fingerprintValue, privateKeyHex) {
-  const canonical = canonicalize(fingerprintValue);
-  const sha256Hex = crypto.createHash("sha256").update(canonical, "utf8").digest("hex");
-  const digest = crypto.createHash("sha512").update(sha256Hex, "utf8").digest().subarray(0, 32);
-  const sig = crypto.sign(null, digest, makeKeyObject(privateKeyHex));
-  return {
-    id: getPublicKey(privateKeyHex),
-    signature: sig.toString("hex"),
-    algorithm: "SECP256K1_RFC8785_V1",
-  };
+function canonicalize(value) { return sdk.canonicalize(value); }
+
+function getPublicKey(privateKeyHex) { return sdk.getPublicKeyId(privateKeyHex); }
+
+async function sign(fingerprintValue, privateKeyHex) {
+  const signed = await sdk.signFingerprint(fingerprintValue, privateKeyHex);
+  return signed.proofs[0];
 }
 
-// ── Key generation ──────────────────────────────────────────────────
-
 function keygen() {
-  const ecdh = crypto.createECDH("secp256k1");
-  ecdh.generateKeys();
-  return {
-    privateKey: ecdh.getPrivateKey().toString("hex"),
-    publicKey: ecdh.getPublicKey().subarray(1).toString("hex"),
-  };
+  const kp = sdk.generateKeyPair();
+  return { privateKey: kp.privateKey, publicKey: sdk.getPublicKeyId(kp.privateKey) };
 }
 
 // ── Exports (for use as a module) ───────────────────────────────────
@@ -108,8 +65,9 @@ if (require.main === module) {
       console.error("Usage: node ded-sign.js sign <privateKeyHex> '<fingerprintValueJson>'");
       process.exit(1);
     }
-    const proof = sign(JSON.parse(contentJson), privateKey);
-    console.log(JSON.stringify(proof, null, 2));
+    sign(JSON.parse(contentJson), loadPrivateKey(privateKey)).then(proof => {
+      console.log(JSON.stringify(proof, null, 2));
+    });
   } else if (command === "keygen") {
     console.log(JSON.stringify(keygen(), null, 2));
   } else {

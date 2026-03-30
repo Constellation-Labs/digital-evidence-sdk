@@ -145,6 +145,7 @@ export interface X402PaymentRequired {
     asset: string;
     payTo: string;
     maxTimeoutSeconds: number;
+    extra?: { name?: string; version?: string; facilitatorUrl?: string };
   }>;
 }
 

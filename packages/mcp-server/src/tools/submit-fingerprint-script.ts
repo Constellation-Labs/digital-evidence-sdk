@@ -1,12 +1,11 @@
 import { z } from "zod";
-import { SIGNING_SCRIPT } from "../signing-script.js";
 
 export const name = "ded_submit_fingerprint_script";
 export const description =
-  "Generate a fully self-contained Node.js script to notarize content by signing and submitting a fingerprint. " +
-  "The script embeds the signing library inline, hashes the content, signs, and submits via the REST API. " +
+  "Generate a Node.js script to notarize content by signing and submitting a fingerprint. " +
+  "The script uses the @constellation-network/digital-evidence-sdk for signing. " +
   "Requires Node.js 18+. Credits are charged when the script is executed, not when generated. " +
-  "Supports two modes: with API key (provide apiKey, orgId, tenantId) or with x402 micropayments (provide walletAddress). " +
+  "Supports two modes: with API key (provide apiKey, orgId, tenantId) or with x402 micropayments (set walletAddress to trigger x402 mode). " +
   "Alternative: if you have DED_SIGNING_PRIVATE_KEY configured, use ded_notarize or ded_notarize_document to sign and submit directly in-process.";
 
 export const inputSchema = z.object({
@@ -47,7 +46,11 @@ export const inputSchema = z.object({
     .string()
     .regex(/^0x[0-9a-fA-F]{40}$/)
     .optional()
-    .describe("Ethereum wallet address (0x...) for x402 micropayment mode"),
+    .describe("Ethereum wallet address (0x...) to enable x402 micropayment mode. The generated script reads the private key from WALLET_PRIVATE_KEY env var."),
+  walletKeyPath: z
+    .string()
+    .optional()
+    .describe("Path to a file containing the Ethereum wallet private key for x402 payments (hex, 0x-prefixed or raw). Used instead of the WALLET_PRIVATE_KEY env var."),
 });
 
 function jsEscape(s: string): string {
@@ -62,9 +65,18 @@ function tagsLiteral(tags?: Record<string, string>): string {
   return `{${entries.join(",")}}`;
 }
 
-export function register(apiBaseUrl: string) {
-  const signingScriptJson = JSON.stringify(SIGNING_SCRIPT);
+const SDK_REQUIRE = `const sdk = require("@constellation-network/digital-evidence-sdk");`;
 
+const LOAD_PRIVATE_KEY = `function loadPrivateKey(keyPathOrHex) {
+  if (/^[0-9a-fA-F]{64}$/.test(keyPathOrHex)) return keyPathOrHex;
+  const content = fs.readFileSync(keyPathOrHex, "utf-8").trim();
+  if (/^[0-9a-fA-F]{64}$/.test(content)) return content;
+  const keyObj = crypto.createPrivateKey(content);
+  const jwk = keyObj.export({ format: "jwk" });
+  return Buffer.from(jwk.d, "base64url").toString("hex");
+}`;
+
+export function register(apiBaseUrl: string) {
   return async (args: z.infer<typeof inputSchema>) => {
     if (!args.content && !args.filePath) {
       return {
@@ -87,15 +99,18 @@ export function register(apiBaseUrl: string) {
 
     if (args.walletAddress) {
       const script = buildX402Script(
-        signingScriptJson,
         apiUrl,
-        jsEscape(args.walletAddress),
         jsEscape(args.privateKeyPath),
         args.content ? jsEscape(args.content) : undefined,
         args.filePath ? jsEscape(args.filePath) : undefined,
         args.documentId ? jsEscape(args.documentId) : undefined,
-        tagsObj
+        tagsObj,
+        args.walletKeyPath ? jsEscape(args.walletKeyPath) : undefined
       );
+      const walletKeyInstr = args.walletKeyPath
+        ? ""
+        : "3. Set wallet key: export WALLET_PRIVATE_KEY=0x...\n";
+      const runStep = args.walletKeyPath ? "3" : "4";
       return {
         content: [
           {
@@ -105,10 +120,12 @@ export function register(apiBaseUrl: string) {
                 script,
                 instructions:
                   "1. Write the script to a file (e.g. submit-x402.js) using a file-write tool — do NOT use shell heredocs\n" +
-                  "2. Run: node submit-x402.js\n" +
-                  "Requires: Node.js 18+ (uses built-in crypto, fs, fetch)\n" +
+                  "2. Install dependencies: npm install @constellation-network/digital-evidence-sdk ethers\n" +
+                  walletKeyInstr +
+                  `${runStep}. Run: node submit-x402.js\n` +
+                  "Requires: Node.js 18+, ethers v6 (for EIP-3009 payment signing)\n" +
                   "The script uses x402 pay-per-request — no API key needed. " +
-                  "It sends an initial request, receives pricing via HTTP 402, then retries with a payment header.",
+                  "It sends an initial request, receives pricing via HTTP 402, signs an EIP-3009 authorization, and retries with payment.",
               },
               null,
               2
@@ -120,7 +137,6 @@ export function register(apiBaseUrl: string) {
 
     if (args.apiKey && args.orgId && args.tenantId) {
       const script = buildApiKeyScript(
-        signingScriptJson,
         apiUrl,
         jsEscape(args.apiKey),
         jsEscape(args.orgId),
@@ -140,8 +156,9 @@ export function register(apiBaseUrl: string) {
                 script,
                 instructions:
                   "1. Write the script to a file (e.g. submit.js) using a file-write tool — do NOT use shell heredocs\n" +
-                  "2. Run: node submit.js\n" +
-                  "Requires: Node.js 18+ (uses built-in crypto, fs, fetch)\n" +
+                  "2. Install SDK: npm install @constellation-network/digital-evidence-sdk\n" +
+                  "3. Run: node submit.js\n" +
+                  "Requires: Node.js 18+\n" +
                   "WARNING: The script contains your API key in plaintext. Do not share or commit it.",
               },
               null,
@@ -174,7 +191,6 @@ export function register(apiBaseUrl: string) {
 }
 
 function buildApiKeyScript(
-  signingScriptJson: string,
   apiUrl: string,
   apiKey: string,
   orgId: string,
@@ -203,8 +219,7 @@ function buildApiKeyScript(
 
 const crypto = require("crypto");
 const fs = require("fs");
-const path = require("path");
-const os = require("os");
+${SDK_REQUIRE}
 
 // ── Configuration ───────────────────────────────────────────────────
 
@@ -215,12 +230,9 @@ const TENANT_ID = "${tenantId}";
 const API_URL = "${apiUrl}";
 const TAGS = ${tagsObj};
 
-// ── Embedded signing library ────────────────────────────────────────
+// ── Private key loading ─────────────────────────────────────────────
 
-const dedSignPath = path.join(os.tmpdir(), "ded-sign-" + process.pid + ".js");
-fs.writeFileSync(dedSignPath, ${signingScriptJson});
-const dedSign = require(dedSignPath);
-fs.unlinkSync(dedSignPath);
+${LOAD_PRIVATE_KEY}
 
 // ── Main ────────────────────────────────────────────────────────────
 
@@ -228,32 +240,20 @@ async function main() {
   ${hashSource}
 
   const eventId = crypto.randomUUID();
-  const timestamp = new Date().toISOString().replace(/\\.\\d{3}Z$/, "Z");
   const docId = ${docIdExpr};
 
-  const privateKeyHex = dedSign.loadPrivateKey(KEY_PATH);
-  const publicKey = dedSign.getPublicKey(privateKeyHex);
+  const privateKeyHex = loadPrivateKey(KEY_PATH);
+  const publicKeyId = sdk.getPublicKeyId(privateKeyHex);
 
-  const fingerprintValue = {
-    documentId: docId,
-    documentRef: docHash,
-    eventId: eventId,
-    orgId: ORG_ID,
-    signerId: publicKey,
-    tenantId: TENANT_ID,
-    timestamp: timestamp,
-    version: 1
-  };
+  const value = sdk.createFingerprintValue(
+    { orgId: ORG_ID, tenantId: TENANT_ID, eventId, documentId: docId, documentRef: docHash },
+    publicKeyId
+  );
+  value.timestamp = value.timestamp.replace(/\\.\\d{3}Z$/, "Z");
 
-  const proof = dedSign.sign(fingerprintValue, privateKeyHex);
-  const canonical = dedSign.canonicalize(fingerprintValue);
-  const metadataHash = crypto.createHash("sha256").update(canonical, "utf8").digest("hex");
-
-  const submission = {
-    attestation: { content: fingerprintValue, proofs: [proof] },
-    metadata: { hash: metadataHash }
-  };
-  if (TAGS) submission.metadata.tags = TAGS;
+  const signed = await sdk.signFingerprint(value, privateKeyHex);
+  const metadata = sdk.createMetadata(value, TAGS);
+  const submission = { attestation: signed, metadata };
 
   console.log("Submitting fingerprint...");
   console.log("  eventId:     " + eventId);
@@ -278,14 +278,13 @@ main().catch(err => { console.error(err); process.exit(1); });
 }
 
 function buildX402Script(
-  signingScriptJson: string,
   apiUrl: string,
-  walletAddress: string,
   keyPath: string,
   content: string | undefined,
   filePath: string | undefined,
   documentId: string | undefined,
-  tagsObj: string
+  tagsObj: string,
+  walletKeyPath: string | undefined
 ): string {
   const docIdExpr = documentId ? `"${documentId}"` : "docHash";
   const hashSource = filePath
@@ -296,121 +295,208 @@ function buildX402Script(
   const contentStr = "${content ?? ""}";
   const docHash = crypto.createHash("sha256").update(contentStr, "utf8").digest("hex");`;
 
+  const walletKeyLoading = walletKeyPath
+    ? `const WALLET_PRIVATE_KEY = fs.readFileSync("${walletKeyPath}", "utf8").trim();`
+    : `const WALLET_PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY;
+if (!WALLET_PRIVATE_KEY) {
+  console.error("Error: WALLET_PRIVATE_KEY environment variable is required");
+  console.error("  export WALLET_PRIVATE_KEY=0x...");
+  process.exit(1);
+}`;
+
   return `#!/usr/bin/env node
 // DED Fingerprint Submit Script (x402 micropayment mode)
 // Generated by ded_submit_fingerprint_script
-// No API key required — pays per request using x402 protocol.
+// Requires: Node.js 18+, @constellation-network/digital-evidence-sdk, ethers v6
 
 "use strict";
 
 const crypto = require("crypto");
 const fs = require("fs");
-const path = require("path");
-const os = require("os");
+${SDK_REQUIRE}
+const { ethers } = require("ethers");
 
 // ── Configuration ───────────────────────────────────────────────────
 
 const KEY_PATH = "${keyPath}";
-const WALLET_ADDRESS = "${walletAddress}";
 const API_URL = "${apiUrl}";
 const TAGS = ${tagsObj};
 
-// Placeholder org/tenant — the x402 middleware overrides these with
-// the wallet's actual org/tenant after payment verification.
-const ORG_ID = "00000000-0000-0000-0000-000000000000";
-const TENANT_ID = "00000000-0000-0000-0000-000000000000";
+${walletKeyLoading}
+const wallet = new ethers.Wallet(WALLET_PRIVATE_KEY);
 
-// ── Embedded signing library ────────────────────────────────────────
+// Derive deterministic org/tenant UUIDs from wallet address
+const ORG_ID = sdk.orgIdFromWallet(wallet.address);
+const TENANT_ID = sdk.tenantIdFromWallet(wallet.address);
 
-const dedSignPath = path.join(os.tmpdir(), "ded-sign-" + process.pid + ".js");
-fs.writeFileSync(dedSignPath, ${signingScriptJson});
-const dedSign = require(dedSignPath);
-fs.unlinkSync(dedSignPath);
+// EIP-712 types for EIP-3009 TransferWithAuthorization
+const TRANSFER_WITH_AUTHORIZATION_TYPES = {
+  TransferWithAuthorization: [
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "validAfter", type: "uint256" },
+    { name: "validBefore", type: "uint256" },
+    { name: "nonce", type: "bytes32" },
+  ],
+};
 
-// ── x402 Payment Flow ───────────────────────────────────────────────
+// ── Private key loading ─────────────────────────────────────────────
 
-async function payAndRetry(url, fetchOpts) {
-  const initialResp = await fetch(url, fetchOpts);
-  if (initialResp.status !== 402) return initialResp;
+${LOAD_PRIVATE_KEY}
 
-  const paymentRequiredHeader = initialResp.headers.get("x-payment-required");
-  if (!paymentRequiredHeader) throw new Error("Received 402 but no X-PAYMENT-REQUIRED header found");
+// ── Step 1: Price Discovery ─────────────────────────────────────────
 
-  const paymentRequired = JSON.parse(Buffer.from(paymentRequiredHeader, "base64").toString("utf8"));
-  const offer = paymentRequired.accepts[0];
+async function discoverPrice(url, body) {
+  console.log("");
+  console.log("--- Step 1: Price Discovery ---");
+  console.log("POST " + url + " (no payment)");
 
-  console.log("Payment required:");
-  console.log("  Amount: " + offer.amount + " atomic USDC ($" + (Number(offer.amount) / 1e6).toFixed(4) + " USD)");
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body,
+  });
+
+  if (resp.status !== 402) {
+    const text = await resp.text();
+    throw new Error("Expected 402, got " + resp.status + ": " + text);
+  }
+
+  const data = await resp.json();
+  const offer = data.accepts[0];
+
+  console.log("  Amount:  " + offer.amount + " atomic USDC ($" + (Number(offer.amount) / 1e6).toFixed(4) + " USD)");
   console.log("  Network: " + offer.network);
-  console.log("  Pay to: " + offer.payTo);
+  console.log("  PayTo:   " + offer.payTo);
+  console.log("  Asset:   " + offer.asset);
+  return offer;
+}
 
-  const now = Math.floor(Date.now() / 1000);
-  const paymentPayload = {
-    x402Version: 2, scheme: "exact", network: offer.network,
-    payload: {
-      signature: "0x",
-      authorization: {
-        from: WALLET_ADDRESS, to: offer.payTo, value: offer.amount,
-        validAfter: "0", validBefore: String(now + 120),
-        nonce: crypto.randomBytes(32).toString("hex")
-      }
-    }
+// ── Step 2: Sign EIP-3009 TransferWithAuthorization ─────────────────
+
+async function signPayment(offer) {
+  console.log("");
+  console.log("--- Step 2: Sign EIP-3009 Authorization ---");
+
+  const chainId = parseInt(offer.network.split(":")[1], 10);
+  const domain = {
+    name: (offer.extra && offer.extra.name) || "USD Coin",
+    version: (offer.extra && offer.extra.version) || "2",
+    chainId: chainId,
+    verifyingContract: offer.asset,
   };
 
-  console.log("Retrying with payment...");
-  return fetch(url, {
-    ...fetchOpts,
-    headers: { ...fetchOpts.headers, "X-PAYMENT": Buffer.from(JSON.stringify(paymentPayload)).toString("base64") }
+  const now = Math.floor(Date.now() / 1000);
+  const nonce = ethers.hexlify(ethers.randomBytes(32));
+
+  const authorization = {
+    from: wallet.address,
+    to: offer.payTo,
+    value: offer.amount,
+    validAfter: "0",
+    validBefore: String(now + 300),
+    nonce: nonce,
+  };
+
+  console.log("  From:        " + authorization.from);
+  console.log("  To:          " + authorization.to);
+  console.log("  Value:       " + authorization.value);
+  console.log("  ValidBefore: " + authorization.validBefore);
+
+  const signature = await wallet.signTypedData(domain, TRANSFER_WITH_AUTHORIZATION_TYPES, authorization);
+  console.log("  Signature:   " + signature.substring(0, 20) + "...");
+
+  const paymentPayload = {
+    x402Version: 2,
+    accepted: {
+      scheme: offer.scheme || "exact",
+      network: offer.network,
+      amount: String(offer.amount),
+      asset: offer.asset,
+      payTo: offer.payTo,
+      maxTimeoutSeconds: offer.maxTimeoutSeconds || 60,
+      extra: offer.extra || {},
+    },
+    payload: {
+      signature: signature,
+      authorization: authorization,
+    },
+  };
+
+  const encoded = Buffer.from(JSON.stringify(paymentPayload), "utf-8").toString("base64");
+  console.log("  Encoded header length: " + encoded.length + " chars");
+  return encoded;
+}
+
+// ── Step 3: Submit with payment ─────────────────────────────────────
+
+async function submitWithPayment(url, body, paymentHeader, count) {
+  console.log("");
+  console.log("--- Step 3: Submit with X-PAYMENT ---");
+  console.log("POST " + url);
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-PAYMENT": paymentHeader,
+      "X-Fingerprint-Count": String(count),
+    },
+    body: body,
   });
+
+  console.log("  Status: " + resp.status);
+  const text = await resp.text();
+  try { console.log("  Body:   " + JSON.stringify(JSON.parse(text), null, 2)); }
+  catch { console.log("  Body:   " + text); }
+
+  if (resp.status >= 400) {
+    throw new Error("Submission failed with " + resp.status + ": " + text);
+  }
+  return text;
 }
 
 // ── Main ────────────────────────────────────────────────────────────
 
 async function main() {
+  console.log("Wallet: " + wallet.address);
+  console.log("Target: " + API_URL);
+
   ${hashSource}
 
   const eventId = crypto.randomUUID();
-  const timestamp = new Date().toISOString().replace(/\\.\\d{3}Z$/, "Z");
   const docId = ${docIdExpr};
 
-  const privateKeyHex = dedSign.loadPrivateKey(KEY_PATH);
-  const publicKey = dedSign.getPublicKey(privateKeyHex);
+  const privateKeyHex = loadPrivateKey(KEY_PATH);
+  const publicKeyId = sdk.getPublicKeyId(privateKeyHex);
 
-  const fingerprintValue = {
-    documentId: docId, documentRef: docHash, eventId: eventId,
-    orgId: ORG_ID, signerId: publicKey, tenantId: TENANT_ID,
-    timestamp: timestamp, version: 1
-  };
+  const value = sdk.createFingerprintValue(
+    { orgId: ORG_ID, tenantId: TENANT_ID, eventId, documentId: docId, documentRef: docHash },
+    publicKeyId
+  );
+  value.timestamp = value.timestamp.replace(/\\.\\d{3}Z$/, "Z");
 
-  const proof = dedSign.sign(fingerprintValue, privateKeyHex);
-  const canonical = dedSign.canonicalize(fingerprintValue);
-  const metadataHash = crypto.createHash("sha256").update(canonical, "utf8").digest("hex");
+  const signed = await sdk.signFingerprint(value, privateKeyHex);
+  const metadata = sdk.createMetadata(value, TAGS);
+  const submission = { attestation: signed, metadata };
 
-  const submission = {
-    attestation: { content: fingerprintValue, proofs: [proof] },
-    metadata: { hash: metadataHash }
-  };
-  if (TAGS) submission.metadata.tags = TAGS;
-
-  console.log("Submitting fingerprint via x402 micropayment...");
+  const body = JSON.stringify([submission]);
+  console.log("");
+  console.log("--- Generating fingerprint ---");
   console.log("  eventId:     " + eventId);
   console.log("  documentRef: " + docHash);
-  console.log("  wallet:      " + WALLET_ADDRESS);
 
-  const response = await payAndRetry(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([submission])
-  });
+  // x402 flow: discover price, sign payment, submit
+  const offer = await discoverPrice(API_URL, body);
+  const paymentHeader = await signPayment(offer);
+  await submitWithPayment(API_URL, body, paymentHeader, 1);
 
-  const text = await response.text();
-  try { console.log(JSON.stringify(JSON.parse(text), null, 2)); }
-  catch { console.log(text); }
-
-  if (!response.ok) { console.error("Submission failed with status " + response.status); process.exit(1); }
-  console.log("Done.");
+  console.log("");
+  console.log("--- Done ---");
+  console.log("Fingerprint submitted successfully via x402 payment.");
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+main().catch(err => { console.error("Fatal: " + err.message); process.exit(1); });
 `;
 }

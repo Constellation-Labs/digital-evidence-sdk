@@ -1,15 +1,20 @@
-import { generateFingerprint, hashDocument } from "@constellation-network/digital-evidence-sdk";
+import { createFingerprintValue, signFingerprint, createMetadata, hashDocument, orgIdFromWallet, tenantIdFromWallet, getPublicKeyId } from "@constellation-network/digital-evidence-sdk";
 import { z } from "zod";
 import type { DedApiClient } from "../api-client.js";
 
 export const name = "ded_notarize";
 export const description =
-  "All-in-one notarization for text or small content: hashes the content string, builds a FingerprintSubmission, signs it, and submits to the DED API. For file uploads (images, PDFs, binary files), use ded_prepare_fingerprint + ded_upload_document instead. Requires DED_SIGNING_PRIVATE_KEY and either DED_API_KEY or x402 payment.";
+  "All-in-one notarization for text or small content: hashes the content string, builds a FingerprintSubmission, signs it, and submits to the DED API. For file uploads (images, PDFs, binary files), use ded_prepare_fingerprint + ded_upload_document instead. Requires DED_SIGNING_PRIVATE_KEY and either DED_API_KEY or x402 payment. Provide orgId + tenantId for API key mode, or walletAddress for x402 mode (org/tenant derived from wallet).";
 
 export const inputSchema = z.object({
   content: z.string().describe("The raw document text to notarize"),
-  orgId: z.string().uuid().describe("Organization UUID"),
-  tenantId: z.string().uuid().describe("Tenant UUID"),
+  orgId: z.string().uuid().optional().describe("Organization UUID (required for API key mode, derived from walletAddress for x402)"),
+  tenantId: z.string().uuid().optional().describe("Tenant UUID (required for API key mode, derived from walletAddress for x402)"),
+  walletAddress: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .optional()
+    .describe("Ethereum wallet address (0x...) for x402 mode — orgId and tenantId are derived deterministically"),
   documentRef: z
     .string()
     .optional()
@@ -26,20 +31,39 @@ export const inputSchema = z.object({
     ),
 });
 
+function resolveOrgTenant(args: { orgId?: string; tenantId?: string; walletAddress?: string }): { orgId: string; tenantId: string } {
+  if (args.walletAddress) {
+    return {
+      orgId: args.orgId ?? orgIdFromWallet(args.walletAddress),
+      tenantId: args.tenantId ?? tenantIdFromWallet(args.walletAddress),
+    };
+  }
+  if (args.orgId && args.tenantId) {
+    return { orgId: args.orgId, tenantId: args.tenantId };
+  }
+  throw new Error("Provide either orgId + tenantId (API key mode) or walletAddress (x402 mode)");
+}
+
 export function register(privateKey: string, client: DedApiClient) {
   return async (args: z.infer<typeof inputSchema>) => {
-    const submission = await generateFingerprint(
+    const { orgId, tenantId } = resolveOrgTenant(args);
+    const publicKeyId = getPublicKeyId(privateKey);
+    const value = createFingerprintValue(
       {
-        orgId: args.orgId,
-        tenantId: args.tenantId,
+        orgId,
+        tenantId,
         eventId: crypto.randomUUID(),
         documentId: hashDocument(args.content),
         documentRef: args.documentRef ?? hashDocument(args.content),
-        includeMetadata: true,
-        tags: args.tags,
       },
-      privateKey
+      publicKeyId
     );
+    // Normalize timestamp to match protobuf Timestamp JSON serialization
+    // (google.protobuf.Timestamp strips trailing .000 when nanos=0)
+    value.timestamp = value.timestamp.replace(/\.000Z$/, 'Z');
+    const signed = await signFingerprint(value, privateKey);
+    const metadata = createMetadata(value, args.tags);
+    const submission = { attestation: signed, metadata };
 
     const result = await client.submitFingerprints(
       [submission],
