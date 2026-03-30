@@ -10,6 +10,7 @@ Available in **TypeScript** (`@constellation-network/digital-evidence-sdk`) and 
 digital-evidence-sdk/
 ├── packages/
 │   ├── typescript/     # @constellation-network/digital-evidence-sdk (npm)
+│   ├── mcp-server/     # @constellation-network/ded-mcp-server (npm)
 │   └── python/         # constellation-digital-evidence-sdk (PyPI)
 └── shared/
     └── test_vectors/   # Cross-language test vectors
@@ -18,6 +19,32 @@ digital-evidence-sdk/
 **Core module** (default import) — pure crypto, no network dependencies. Works in browsers, Node.js, serverless.
 
 **Network module** (separate import) — HTTP client for the DED Ingestion API. API-key authenticated endpoints for submission/search, plus public endpoints for lookup and proofs.
+
+**MCP server** (`@constellation-network/ded-mcp-server`) — gives any MCP-compatible AI assistant (Claude, Cursor, Windsurf, VS Code, etc.) the ability to notarize documents, query fingerprints, and verify on-chain proofs. See the [MCP server README](packages/mcp-server/README.md) for setup instructions.
+
+## MCP Server
+
+```bash
+npx @constellation-network/ded-mcp-server
+```
+
+Add to your MCP config (`.mcp.json`, `.cursor/mcp.json`, etc.):
+
+```json
+{
+  "mcpServers": {
+    "ded": {
+      "command": "npx",
+      "args": ["-y", "@constellation-network/ded-mcp-server"],
+      "env": {
+        "DED_API_BASE_URL": "https://your-ded-api.example.com",
+        "DED_API_KEY": "your-api-key",
+        "DED_SIGNING_PRIVATE_KEY_FILE": "/path/to/private-key"
+      }
+    }
+  }
+}
+```
 
 ## TypeScript
 

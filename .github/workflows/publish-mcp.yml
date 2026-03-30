@@ -1,0 +1,63 @@
+name: Publish MCP Server
+
+on:
+  push:
+    tags:
+      - 'mcp-server-v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+          cache-dependency-path: packages/mcp-server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: packages/mcp-server
+        run: npm ci
+
+      - name: Build
+        working-directory: packages/mcp-server
+        run: npm run build
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#mcp-server-v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Verify package version matches tag
+        working-directory: packages/mcp-server
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [[ "$PACKAGE_VERSION" != "${{ steps.version.outputs.version }}" ]]; then
+            echo "::error::Package version ($PACKAGE_VERSION) does not match tag (${{ steps.version.outputs.version }})"
+            exit 1
+          fi
+
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Publish to npm
+        working-directory: packages/mcp-server
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MCP Server v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
