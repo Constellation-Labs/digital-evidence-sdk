@@ -21,9 +21,17 @@ jobs:
           cache: 'npm'
           cache-dependency-path: packages/mcp-server/package-lock.json
 
+      - name: Build base SDK
+        working-directory: packages/typescript
+        run: |
+          npm ci
+          npm run build
+
       - name: Install dependencies
         working-directory: packages/mcp-server
-        run: npm ci
+        run: |
+          npm ci
+          npm link ../typescript
 
       - name: Build
         working-directory: packages/mcp-server
