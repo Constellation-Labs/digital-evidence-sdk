@@ -46,7 +46,7 @@
     "directory": "packages/typescript-x402"
   },
   "dependencies": {
-    "@constellation-network/digital-evidence-sdk": "^0.3.1"
+    "@constellation-network/digital-evidence-sdk": "^0.3.2"
   },
   "peerDependencies": {
     "ethers": "^6.0.0"
