@@ -5,16 +5,13 @@ MCP server for the [Digital Evidence Depository (DED)](https://constellation-mai
 ## Quick start
 
 ```bash
-# from the repo root
-cd packages/mcp-server
-npm install
-npm run build
+npx @constellation-network/ded-mcp-server
 ```
 
 ### Run with the MCP Inspector (interactive web UI)
 
 ```bash
-npx @modelcontextprotocol/inspector node dist/index.js
+npx @modelcontextprotocol/inspector npx @constellation-network/ded-mcp-server
 ```
 
 ## Setup
@@ -27,8 +24,8 @@ Add to `.mcp.json`, `~/.claude.json`, or `claude_desktop_config.json`:
 {
   "mcpServers": {
     "ded": {
-      "command": "node",
-      "args": ["/absolute/path/to/packages/mcp-server/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@constellation-network/ded-mcp-server"],
       "env": {
         "DED_API_BASE_URL": "${DED_API_BASE_URL}",
         "DED_API_KEY": "${DED_API_KEY}",
@@ -46,7 +43,7 @@ claude mcp add ded \
   -e DED_API_BASE_URL="$DED_API_BASE_URL" \
   -e DED_API_KEY="$DED_API_KEY" \
   -e DED_SIGNING_PRIVATE_KEY_FILE="$DED_SIGNING_PRIVATE_KEY_FILE" \
-  -- node /absolute/path/to/packages/mcp-server/dist/index.js
+  -- npx -y @constellation-network/ded-mcp-server
 ```
 
 ### Cursor
@@ -57,8 +54,8 @@ Add to `.cursor/mcp.json` in your project root:
 {
   "mcpServers": {
     "ded": {
-      "command": "node",
-      "args": ["/absolute/path/to/packages/mcp-server/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@constellation-network/ded-mcp-server"],
       "env": {
         "DED_API_BASE_URL": "${DED_API_BASE_URL}",
         "DED_API_KEY": "${DED_API_KEY}",
@@ -77,8 +74,8 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "ded": {
-      "command": "node",
-      "args": ["/absolute/path/to/packages/mcp-server/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@constellation-network/ded-mcp-server"],
       "env": {
         "DED_API_BASE_URL": "${DED_API_BASE_URL}",
         "DED_API_KEY": "${DED_API_KEY}",
@@ -97,8 +94,8 @@ Add to `.vscode/mcp.json` in your project root:
 {
   "servers": {
     "ded": {
-      "command": "node",
-      "args": ["/absolute/path/to/packages/mcp-server/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@constellation-network/ded-mcp-server"],
       "env": {
         "DED_API_BASE_URL": "${DED_API_BASE_URL}",
         "DED_API_KEY": "${DED_API_KEY}",
@@ -238,6 +235,19 @@ As an alternative to API key authentication, the DED REST API supports [x402](ht
 
 See the `ded://docs/x402-payment` resource for the full two-step payment flow and client implementation details.
 
+
+## Development
+
+For local development, clone the repo and link the SDK:
+
+```bash
+git clone https://github.com/Constellation-Labs/digital-evidence-sdk.git
+cd digital-evidence-sdk/packages/mcp-server
+npm install
+npm run build
+npm start
+```
+
 ## Architecture
 
-The MCP server uses the [`@constellation-network/digital-evidence-sdk`](../typescript/) for core cryptographic operations (hashing, signing, fingerprint assembly) and maintains its own lightweight API client for the DED HTTP endpoints.
+The MCP server uses the [`@constellation-network/digital-evidence-sdk`](https://www.npmjs.com/package/@constellation-network/digital-evidence-sdk) for core cryptographic operations (hashing, signing, fingerprint assembly) and maintains its own lightweight API client for the DED HTTP endpoints.

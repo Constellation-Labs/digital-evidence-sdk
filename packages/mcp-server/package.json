@@ -7,12 +7,18 @@
   "bin": {
     "ded-mcp-server": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@constellation-network/digital-evidence-sdk": "file:../typescript",
+    "@constellation-network/digital-evidence-sdk": "^0.3.0",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "zod": "^3.23.0"
   },
@@ -20,6 +26,14 @@
     "@types/node": "^20.11.0",
     "typescript": "^5.3.3"
   },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "constellation",
+    "digital-evidence",
+    "notarization",
+    "fingerprint"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Constellation-Labs/digital-evidence-sdk.git",
