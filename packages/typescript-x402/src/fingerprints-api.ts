@@ -2,7 +2,7 @@
  * x402 fingerprint API client — same surface as the base SDK minus validate().
  */
 
-import type { FingerprintSubmission } from '@constellation-network/digital-evidence-sdk';
+import type { FingerprintSubmission, FingerprintSubmissionResult } from '@constellation-network/digital-evidence-sdk';
 import type {
   FingerprintDetail,
   FingerprintProof,
@@ -48,7 +48,7 @@ export class X402FingerprintsApi {
   /** Submit fingerprints for notarization (x402 payment). */
   async submit(
     submissions: FingerprintSubmission[]
-  ): Promise<PaymentOr<FingerprintSubmission[]>> {
+  ): Promise<PaymentOr<FingerprintSubmissionResult[]>> {
     return this.http.postWithPayment('/v1/fingerprints', submissions);
   }
 
@@ -57,8 +57,8 @@ export class X402FingerprintsApi {
     submissions: FingerprintSubmission[],
     batchSize = 10,
     delayMs = 1000
-  ): Promise<PaymentOr<FingerprintSubmission[]>[]> {
-    const results: PaymentOr<FingerprintSubmission[]>[] = [];
+  ): Promise<PaymentOr<FingerprintSubmissionResult[]>[]> {
+    const results: PaymentOr<FingerprintSubmissionResult[]>[] = [];
 
     for (let i = 0; i < submissions.length; i += batchSize) {
       const batch = submissions.slice(i, i + batchSize);

@@ -2,6 +2,7 @@
   "name": "@constellation-network/digital-evidence-sdk",
   "version": "0.3.0",
   "description": "TypeScript SDK for the Digital Evidence Depository (DED) on Constellation Network",
+  "type": "module",
   "main": "dist/cjs/core/index.js",
   "module": "dist/esm/core/index.js",
   "types": "dist/types/core/index.d.ts",
@@ -22,7 +23,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "npm run build:bundle && npm run build:types",
+    "build": "npm run build:bundle && npm run build:types && npm run build:fixup",
+    "build:fixup": "echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
     "build:bundle": "rollup -c",
     "build:types": "tsc -p tsconfig.types.json",
     "test": "jest",

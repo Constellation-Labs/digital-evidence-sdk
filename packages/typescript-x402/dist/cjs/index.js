@@ -397,26 +397,63 @@ class X402HttpClient {
  * import { ethers } from 'ethers';
  * import { DedX402Client, createEthersSigner } from '@constellation-network/digital-evidence-sdk-x402';
  *
- * const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!);
+ * const wallet = new ethers.Wallet(process.env.ETH_PRIVATE_KEY!);
  * const client = new DedX402Client({
  *   baseUrl: 'https://de-api.constellationnetwork.io',
  *   signer: createEthersSigner(wallet),
+ *   signingPrivateKey: process.env.DAG_PRIVATE_KEY!,
  * });
  *
- * const results = await client.fingerprints.submit(submissions);
+ * // Generate with wallet-derived org/tenant IDs
+ * const submission = await client.generateFingerprint({
+ *   eventId: 'evt-1',
+ *   documentId: 'doc-1',
+ *   documentContent: 'Hello, world!',
+ * });
+ * const results = await client.fingerprints.submit([submission]);
  * ```
  */
 class DedX402Client {
     constructor(config) {
+        this._config = config;
         const http = new X402HttpClient(config);
         this.fingerprints = new X402FingerprintsApi(http);
         this.batches = new network.BatchesApi(http);
         this.orgId = digitalEvidenceSdk.orgIdFromWallet(config.signer.address);
         this.tenantId = digitalEvidenceSdk.tenantIdFromWallet(config.signer.address);
+        this._generator = config.signingPrivateKey
+            ? new digitalEvidenceSdk.FingerprintGenerator({
+                privateKey: config.signingPrivateKey,
+                orgId: this.orgId,
+                tenantId: this.tenantId,
+            })
+            : null;
+    }
+    /**
+     * Generate a fingerprint submission with wallet-derived org/tenant IDs.
+     *
+     * Automatically fills in `orgId` and `tenantId` from the wallet address
+     * if not provided in the options.
+     *
+     * Requires `signingPrivateKey` to be set in `X402Config`.
+     *
+     * @param options - Fingerprint generation options. `orgId` and `tenantId`
+     *   are auto-populated from the wallet if omitted.
+     * @returns A complete FingerprintSubmission ready for `client.fingerprints.submit()`.
+     */
+    async generateFingerprint(options) {
+        if (!this._generator) {
+            throw new Error('signingPrivateKey must be set in X402Config to generate fingerprints');
+        }
+        return this._generator.generate({
+            ...options,
+            orgId: options.orgId || this.orgId,
+            tenantId: options.tenantId || this.tenantId,
+        });
     }
     /** The Ethereum wallet address used for payments. */
     get walletAddress() {
-        return this.fingerprints['http']['signer'].address;
+        return this._config.signer.address;
     }
 }
 

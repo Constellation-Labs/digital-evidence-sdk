@@ -1,7 +1,7 @@
 /**
  * x402 fingerprint API client — same surface as the base SDK minus validate().
  */
-import type { FingerprintSubmission } from '@constellation-network/digital-evidence-sdk';
+import type { FingerprintSubmission, FingerprintSubmissionResult } from '@constellation-network/digital-evidence-sdk';
 import type { FingerprintDetail, FingerprintProof, FingerprintSearchParams, FingerprintStatus, PlatformStats, DataResponse, PaginatedResponse, DocumentUploadResultItem } from '@constellation-network/digital-evidence-sdk/network';
 import { X402HttpClient } from './x402-http-client';
 import type { PaymentOr } from './types';
@@ -19,9 +19,9 @@ export declare class X402FingerprintsApi {
     private readonly http;
     constructor(http: X402HttpClient);
     /** Submit fingerprints for notarization (x402 payment). */
-    submit(submissions: FingerprintSubmission[]): Promise<PaymentOr<FingerprintSubmission[]>>;
+    submit(submissions: FingerprintSubmission[]): Promise<PaymentOr<FingerprintSubmissionResult[]>>;
     /** Submit fingerprints in batches (each batch is a separate x402 payment). */
-    submitInBatches(submissions: FingerprintSubmission[], batchSize?: number, delayMs?: number): Promise<PaymentOr<FingerprintSubmission[]>[]>;
+    submitInBatches(submissions: FingerprintSubmission[], batchSize?: number, delayMs?: number): Promise<PaymentOr<FingerprintSubmissionResult[]>[]>;
     /** Upload fingerprints with documents (x402 payment, multipart). */
     upload(submissions: FingerprintSubmission[], documents: Map<string, {
         blob: Blob;

@@ -55,6 +55,8 @@ export interface X402Config {
     baseUrl: string;
     /** x402 signer for payment signing */
     signer: X402Signer;
+    /** DAG/SECP256K1 private key for fingerprint signing (64-char hex). Required for generateFingerprint(). */
+    signingPrivateKey?: string;
     /** Whether to automatically pay on 402 responses (default: true) */
     autoPay?: boolean;
     /** Request timeout in milliseconds (default: 30000) */

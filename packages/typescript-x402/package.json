@@ -2,6 +2,7 @@
   "name": "@constellation-network/digital-evidence-sdk-x402",
   "version": "0.1.0",
   "description": "x402 micropayment extension for the Digital Evidence Depository SDK",
+  "type": "module",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/types/index.d.ts",
@@ -17,7 +18,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "npm run build:bundle && npm run build:types",
+    "build": "npm run build:bundle && npm run build:types && npm run build:fixup",
+    "build:fixup": "echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
     "build:bundle": "rollup -c",
     "build:types": "tsc -p tsconfig.types.json",
     "test": "jest",
