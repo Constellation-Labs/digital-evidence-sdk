@@ -21,7 +21,7 @@ ts-lint:
 ts-x402-install:
 	cd packages/typescript-x402 && npm install
 
-ts-x402-build:
+ts-x402-build: ts-build
 	cd packages/typescript-x402 && npm run build
 
 ts-x402-test:

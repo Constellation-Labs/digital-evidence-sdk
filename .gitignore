@@ -7,8 +7,11 @@ venv/
 
 # Build output
 packages/typescript/dist/
+packages/typescript-x402/dist/
 packages/python/dist/
+packages/python-x402/dist/
 packages/python/build/
+packages/python-x402/build/
 *.egg-info/
 
 # IDE

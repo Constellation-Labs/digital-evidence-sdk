@@ -57,10 +57,10 @@ export class DedX402Client {
   readonly tenantId: string;
 
   private readonly _generator: FingerprintGenerator | null;
-  private readonly _config: X402Config;
+  private readonly _walletAddress: string;
 
   constructor(config: X402Config) {
-    this._config = config;
+    this._walletAddress = config.signer.address;
     const http = new X402HttpClient(config);
     this.fingerprints = new X402FingerprintsApi(http);
     this.batches = new BatchesApi(http as any);
@@ -103,13 +103,13 @@ export class DedX402Client {
 
     return this._generator.generate({
       ...options,
-      orgId: options.orgId || this.orgId,
-      tenantId: options.tenantId || this.tenantId,
+      orgId: options.orgId ?? this.orgId,
+      tenantId: options.tenantId ?? this.tenantId,
     });
   }
 
   /** The Ethereum wallet address used for payments. */
   get walletAddress(): string {
-    return this._config.signer.address;
+    return this._walletAddress;
   }
 }
