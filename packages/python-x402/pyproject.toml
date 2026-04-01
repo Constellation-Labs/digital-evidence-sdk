@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Security :: Cryptography",
 ]
 dependencies = [
-    "constellation-digital-evidence-sdk[network]>=0.3.0",
+    "constellation-digital-evidence-sdk[network]>=0.3.1",
     "eth-account>=0.13.0",
 ]
 

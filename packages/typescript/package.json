@@ -1,6 +1,6 @@
 {
   "name": "@constellation-network/digital-evidence-sdk",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "TypeScript SDK for the Digital Evidence Depository (DED) on Constellation Network",
   "type": "module",
   "main": "dist/cjs/core/index.js",
