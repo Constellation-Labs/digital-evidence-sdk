@@ -1,6 +1,6 @@
 {
   "name": "@constellation-network/digital-evidence-sdk-x402",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "x402 micropayment extension for the Digital Evidence Depository SDK",
   "type": "module",
   "main": "dist/cjs/index.js",
@@ -46,7 +46,7 @@
     "directory": "packages/typescript-x402"
   },
   "dependencies": {
-    "@constellation-network/digital-evidence-sdk": "^0.3.0"
+    "@constellation-network/digital-evidence-sdk": "^0.3.1"
   },
   "peerDependencies": {
     "ethers": "^6.0.0"
