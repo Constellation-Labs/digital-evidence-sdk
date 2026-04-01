@@ -17,6 +17,19 @@ ts-test:
 ts-lint:
 	cd packages/typescript && npm run lint
 
+# TypeScript x402
+ts-x402-install:
+	cd packages/typescript-x402 && npm install
+
+ts-x402-build: ts-build
+	cd packages/typescript-x402 && npm run build
+
+ts-x402-test:
+	cd packages/typescript-x402 && npm test
+
+ts-x402-lint:
+	cd packages/typescript-x402 && npm run lint
+
 # Python
 py-venv:
 	python3 -m venv $(PYTHON_VENV)
@@ -33,15 +46,27 @@ py-test:
 py-lint:
 	cd packages/python && $(CURDIR)/$(PYTHON_VENV)/bin/ruff check src tests
 
+# Python x402
+py-x402-install: py-venv
+	cd packages/python-x402 && ../$(PIP) install -e ".[dev]"
+
+py-x402-test:
+	cd packages/python-x402 && $(CURDIR)/$(PYTHON_VENV)/bin/pytest
+
+py-x402-lint:
+	cd packages/python-x402 && $(CURDIR)/$(PYTHON_VENV)/bin/ruff check src tests
+
 # Combined targets
-install: ts-install py-install
+install: ts-install ts-x402-install py-install py-x402-install
 
-build: ts-build py-build
+build: ts-build ts-x402-build py-build
 
-test: ts-test py-test
+test: ts-test ts-x402-test py-test py-x402-test
 
-lint: ts-lint py-lint
+lint: ts-lint ts-x402-lint py-lint py-x402-lint
 
 clean:
 	rm -rf packages/typescript/dist packages/typescript/coverage
+	rm -rf packages/typescript-x402/dist packages/typescript-x402/coverage
 	rm -rf packages/python/dist packages/python/build packages/python/*.egg-info
+	rm -rf packages/python-x402/dist packages/python-x402/build packages/python-x402/*.egg-info
