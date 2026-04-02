@@ -20,7 +20,7 @@ Your organization and tenant IDs are deterministically derived from your wallet 
 
 | Package | Language | Install |
 |---------|----------|---------|
-| `digital-evidence-sdk-x402` | Python | `pip install digital-evidence-sdk-x402` |
+| `constellation-digital-evidence-sdk-x402` | Python | `pip install constellation-digital-evidence-sdk-x402` |
 | `@constellation-network/digital-evidence-sdk-x402` | TypeScript | `npm install @constellation-network/digital-evidence-sdk-x402` |
 
 Both packages expose the same API surface as their base SDKs but replace API key auth with x402 payments.
@@ -32,7 +32,7 @@ Both packages expose the same API surface as their base SDKs but replace API key
 ### Install
 
 ```bash
-pip install digital-evidence-sdk-x402
+pip install constellation-digital-evidence-sdk-x402
 ```
 
 This installs the base SDK (`constellation-digital-evidence-sdk`) and `eth-account` for EIP-712 signing.
@@ -40,7 +40,7 @@ This installs the base SDK (`constellation-digital-evidence-sdk`) and `eth-accou
 ### Quick start
 
 ```python
-from digital_evidence_sdk_x402 import (
+from constellation_digital_evidence_sdk_x402 import (
     DedX402Client,
     X402Config,
     GenerateOptions,
@@ -76,7 +76,7 @@ async with DedX402Client(X402Config(
 Set `auto_pay=False` to inspect the price before paying:
 
 ```python
-from digital_evidence_sdk_x402 import DedX402Client, X402Config
+from constellation_digital_evidence_sdk_x402 import DedX402Client, X402Config
 
 client = DedX402Client(X402Config(
     base_url="https://de-api.constellationnetwork.io",
@@ -100,7 +100,7 @@ elif result.kind == "result":
 Implement the `X402Signer` protocol to use hardware wallets, KMS, or other backends:
 
 ```python
-from digital_evidence_sdk_x402 import X402Signer, DedX402Client, X402Config
+from constellation_digital_evidence_sdk_x402 import X402Signer, DedX402Client, X402Config
 
 class MyKmsSigner:
     @property
