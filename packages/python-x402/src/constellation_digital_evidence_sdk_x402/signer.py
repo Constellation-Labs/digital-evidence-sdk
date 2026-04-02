@@ -53,4 +53,4 @@ class LocalWalletSigner:
             message_data=message,
         )
         signed = Account.sign_message(signable, self._private_key)
-        return signed.signature.hex()
+        return "0x" + signed.signature.hex()

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "constellation-digital-evidence-sdk-x402"
-version = "0.1.0"
+version = "0.1.1"
 description = "x402 micropayment extension for the Digital Evidence Depository SDK"
 readme = "README.md"
 license = {text = "Apache-2.0"}

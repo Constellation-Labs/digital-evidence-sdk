@@ -19,35 +19,49 @@ This installs the base SDK (`constellation-digital-evidence-sdk`) and `eth-accou
 ## Quick start
 
 ```python
+import asyncio
+import uuid
+
 from constellation_digital_evidence_sdk_x402 import (
     DedX402Client,
     X402Config,
     GenerateOptions,
 )
 
-async with DedX402Client(X402Config(
-    base_url="https://de-api.constellationnetwork.io",
-    wallet_private_key="0x...",   # Ethereum key (for x402 payments)
-    signing_private_key="...",    # DAG/SECP256K1 key (for fingerprint signing)
-)) as client:
-    # Generate a fingerprint — org_id and tenant_id are auto-derived from wallet
-    submission = client.generate_fingerprint(GenerateOptions(
-        org_id="",
-        tenant_id="",
-        event_id="evt-001",
-        document_id="contract-2024-001",
-        document_content="This is my document content",
-        include_metadata=True,
-        tags={"department": "legal"},
-    ))
 
-    # Submit (x402 payment handled automatically)
-    results = await client.fingerprints.submit([submission])
+async def main():
+    async with DedX402Client(X402Config(
+            base_url="https://de-api.constellationnetwork.io",
+            wallet_private_key="0x...",   # Ethereum key (for x402 payments)
+            signing_private_key="...",    # DAG/SECP256K1 key (for fingerprint signing)
+    )) as client:
+        # Generate a fingerprint — org_id and tenant_id are auto-derived from wallet
+        submission = client.generate_fingerprint(GenerateOptions(
+            org_id="",
+            tenant_id="",
+            event_id=str(uuid.uuid4()),
+            document_id="contract-2024-001",
+            document_content="This is my document content",
+            include_metadata=True,
+            tags={"department": "legal"},
+        ))
 
-    # Public endpoints (free, no payment)
-    detail = await client.fingerprints.get_by_hash(hash_value)
-    proof = await client.fingerprints.get_proof(hash_value)
-    stats = await client.fingerprints.get_stats()
+        print("Submission:", submission)
+
+        # Submit (x402 payment handled automatically)
+        results = await client.fingerprints.submit([submission])
+        print("Results:", results)
+
+        # Public endpoints (free, no payment)
+        hash_value = results.data[0]["hash"]
+        detail = await client.fingerprints.get_by_hash(hash_value)
+        print("Detail:", detail)
+        stats = await client.fingerprints.get_stats()
+        print("Stats:", stats)
+        # proof = await client.fingerprints.get_proof(hash_value)  # available after batch commit
+
+asyncio.run(main())
+
 ```
 
 ## How it works
@@ -66,7 +80,7 @@ client = DedX402Client(X402Config(
     wallet_private_key="0x...",  # Ethereum key for x402 payments
     signing_private_key="...",   # DAG/SECP256K1 key for fingerprint signing (optional)
     auto_pay=True,               # Auto-pay on 402 responses (default: True)
-    timeout=30000,               # Request timeout in ms (default: 30000)
+    timeout=30.0,                # Request timeout in seconds (default: 30.0)
 ))
 ```
 
@@ -79,7 +93,23 @@ if result.kind == "payment_required":
     offer = result.payment.accepts[0]
     print(f"Cost: {offer.amount} atomic USDC on {offer.network}")
     print(f"Pay to: {offer.pay_to}")
-    # Re-submit with auto_pay=True, or sign manually
+
+    # Sign an EIP-3009 TransferWithAuthorization for the offer
+    # (see x402 payments guide for full signing details)
+    payment_header = sign_x402_payment(wallet_private_key, offer)  # base64-encoded
+
+    # Retry the request with the signed payment header
+    async with httpx.AsyncClient() as http:
+        response = await http.post(
+            f"{base_url}/v1/fingerprints",
+            headers={
+                "Content-Type": "application/json",
+                "X-PAYMENT": payment_header,
+            },
+            content=json.dumps([submission.to_dict()]),
+        )
+    print("Submitted:", response.json())
+
 elif result.kind == "result":
     print(f"Submitted: {result.data}")
 ```
