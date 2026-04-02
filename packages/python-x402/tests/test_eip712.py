@@ -2,11 +2,11 @@
 
 import time
 
-from digital_evidence_sdk_x402.eip712 import (
+from constellation_digital_evidence_sdk_x402.eip712 import (
     build_authorization,
     build_eip3009_domain,
 )
-from digital_evidence_sdk_x402.types import PaymentOffer
+from constellation_digital_evidence_sdk_x402.types import PaymentOffer
 
 
 def _make_offer(**overrides) -> PaymentOffer:

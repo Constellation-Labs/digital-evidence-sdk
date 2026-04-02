@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from digital_evidence_sdk_x402.http_client import X402ApiError, X402HttpClient
-from digital_evidence_sdk_x402.types import X402Config
+from constellation_digital_evidence_sdk_x402.http_client import X402ApiError, X402HttpClient
+from constellation_digital_evidence_sdk_x402.types import X402Config
 
 
 SAMPLE_402_BODY = {

@@ -3,7 +3,7 @@
 import base64
 import json
 
-from digital_evidence_sdk_x402.types import (
+from constellation_digital_evidence_sdk_x402.types import (
     PaymentOffer,
     PaymentRequired,
     PaymentResult,

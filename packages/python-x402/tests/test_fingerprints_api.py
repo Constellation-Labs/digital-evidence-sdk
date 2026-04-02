@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from digital_evidence_sdk_x402.fingerprints_api import X402FingerprintsApi
-from digital_evidence_sdk_x402.http_client import X402HttpClient
-from digital_evidence_sdk_x402.types import PaymentResult
+from constellation_digital_evidence_sdk_x402.fingerprints_api import X402FingerprintsApi
+from constellation_digital_evidence_sdk_x402.http_client import X402HttpClient
+from constellation_digital_evidence_sdk_x402.types import PaymentResult
 
 
 def _mock_http() -> X402HttpClient:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from digital_evidence_sdk_x402.signer import LocalWalletSigner
+from constellation_digital_evidence_sdk_x402.signer import LocalWalletSigner
 
 
 # Well-known test private key (DO NOT use in production)
